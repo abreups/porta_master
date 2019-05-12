@@ -31,7 +31,7 @@
 ================================================================================================= */
 
 #define OLED            1   // 0 = no OLED display; 1 = otherwise
-#define DEBUG           2   // 0 = no debug messages; 1 = error messages only ; 2 = all debug messages
+#define DEBUG           1   // 0 = no debug messages; 1 = error messages only ; 2 = all debug messages
 
 // include libraries
 #include <SPI.h>            // comunication with radio LoRa 
@@ -45,10 +45,10 @@
 #include <WiFi.h>           // Wi-Fi coonectivity
 #include <NTPClient.h>      // for ntp clock synchronization
 #include <WiFiUdp.h>        // for ntp clock synchronization
-#include <AWS_IOT.h>        // AWS IoT interface
+//#include <AWS_IOT.h>        // AWS IoT interface
 #include <FastCRC.h>        // lib for CRC calculations
 #include <TimeLib.h>        // time functions used with ntp time
-AWS_IOT PPP_Master;
+//AWS_IOT PPP_Master;
 FastCRC8 CRC8;
 
 #include <ArduinoJson.h>     // Json library to send data to AWS (use version 5. Do not use version 6)
@@ -67,9 +67,9 @@ FastCRC8 CRC8;
 
 
 // sensor de temperatura AWS do Evaldo
-char HOST_ADDRESS[]="aljq8kgezlxbs.iot.us-east-1.amazonaws.com";
-char CLIENT_ID[]= "MeuSensorTempClient";
-char TOPIC_NAME[]= "$aws/things/TemperatureSensor/shadow/update";
+//char HOST_ADDRESS[]="aljq8kgezlxbs.iot.us-east-1.amazonaws.com";
+//char CLIENT_ID[]= "MeuSensorTempClient";
+//char TOPIC_NAME[]= "$aws/things/TemperatureSensor/shadow/update";
 
 
 /*
@@ -116,7 +116,7 @@ char TOPIC_NAME[]= "$aws/things/sensorTemperatura1/shadow/update";
 #define DI00    26         // GPIO26 -- SX127x's IRQ(Interrupt Request)
 
 // LoRa frequency definition
-#define BAND    433E6       // Lora Radio frequency -  433E6 for China, 868E6 for Europe, 915E6 for USA, Brazil
+#define BAND    915E6       // Lora Radio frequency -  433E6 for China, 868E6 for Europe, 915E6 for USA, Brazil
 
 // Variables definitions
 byte    TxmsgCount =                    0;              // counter of outgoing messages
@@ -198,7 +198,7 @@ char rcvdPayload[512];
 
 #if OLED > 0
 //parameters: address,SDA,SCL 
-SSD1306 display(0x3c, 4, 15);                           //define OLED object
+SSD1306 display(0x3c, 4, 15);   //define OLED object
 #endif
 
 //String rssi = "RSSI --";
@@ -210,8 +210,8 @@ SSD1306 display(0x3c, 4, 15);                           //define OLED object
 const char *ssid     = "put your wifi ssid here";
 const char *password = "put your wifi password here";
 ----  then the line below will include it in the code (adjust the path to your case) ---------*/
-//#include "/Users/pauloabreu/PPP_Master_wifi_credentials.txt" // wi-fi do Paulo
-#include "C:\Users\enascimento\Desktop\my\placas\ESP32Lora\mywifi.txt" // wi-fi do Evaldo
+#include "/Users/pauloabreu/PPP_Master_wifi_credentials.txt" // wi-fi do Paulo
+
 
 WiFiUDP ntpUDP; // creates a UDP instance to send and receive packets
 int16_t utc = -3; // UTC -3:00 for Brasilia time
@@ -325,6 +325,7 @@ void sendBuffer() {
 }
 
 
+// ------------------------------ received() --------------------------------
 // check if there are bytes in the Rx buffer
 // returns:
 //    FALSE if nothing has been received by the LoRa radio yet
@@ -404,6 +405,8 @@ void showRxmsgCount () {
 }
 */
 
+
+// ------------------------------ theDateIs() --------------------------------
 // Use the internal (adjusted by ntp) clock to create a string
 // with the current date and time.
 // Tipically used for debugging.
@@ -463,6 +466,7 @@ String theDateIs() {
     return dateNow;
 } // end theDateIs()
 
+
 /* ---------------------------------------------------------------------------------------
  *  teste de comando do master para o slave
  *  vamos implementar uma função que envia uma msg de comando para o slave
@@ -481,6 +485,7 @@ String theDateIs() {
  *  colocada em setup para testes, depois deverá ser adicionada a SSM
  ------------------------------------------------------------------------------------------ */
 
+// ------------------------------ gpioSetup() --------------------------------
 void gpioSetup (byte gpio_pin, byte gpio_value) {
   tx_buffer[tx_buffer_head++] = HEADER;     // starts with a HEADER
   tx_buffer[tx_buffer_head++] = 0x04;       // payload length
@@ -496,7 +501,7 @@ void gpioSetup (byte gpio_pin, byte gpio_value) {
 } // end of gpioSetup
 
 
-// ------------------------------------------------------- setup everything ----------------------------------------------------------------
+// ------------------------------------------------------- setup  ----------------------------------------------------------------
 
 void setup() {
   Serial.begin(115200);                   
@@ -604,33 +609,7 @@ void setup() {
   Serial.print("The time now is: "); Serial.println(hoursStr + ":" + minuteStr + ":" + secondStr);
 */
 
-  // Connect to AWS IoT and subscribe to a topic
-  if( PPP_Master.connect(HOST_ADDRESS,CLIENT_ID) == 0 ) {
-#if DEBUG >= 1
-      Serial.print(theDateIs());
-      Serial.println("setup::  Connected to AWS");
-#endif
-      delay(3000);
 
-      if( 0 == PPP_Master.subscribe(TOPIC_NAME, mySubCallBackHandler) ) {
-#if DEBUG >= 1
-          Serial.print(theDateIs());
-          Serial.println("setup::  Subscribe Successfull");
-#endif
-      } else {
-#if DEBUG >= 1
-          Serial.print(theDateIs());
-          Serial.println("setup::  Subscribe Failed, Check the Thing Name and Certificates");
-#endif
-          while(1);
-      }
-  } else {
-#if DEBUG >= 1
-      Serial.print(theDateIs());
-      Serial.println("setup::  AWS connection failed, Check the HOST Address");
-#endif
-      while(1); 
-  }
   delay(5000);
 #if OLED > 0
   display.clear();
@@ -644,7 +623,7 @@ void setup() {
   SPI.begin(SCK,MISO,MOSI,SS);                    // start SPI with LoRa
   LoRa.setPins(SS, RST, DI00);                    // set CS, reset, IRQ pin
 
-  // initialize ratio at 433 MHz
+  // initialize ratio at BAND MHz
   if (!LoRa.begin(BAND)) {
 #if DEBUG >= 1
     Serial.print(theDateIs());      
@@ -657,10 +636,6 @@ void setup() {
     while (true);                                 // if failed, do nothing forever
   }
 
-	// enable Lora radio crc check
-	// - INVESTIGAR - ESTA ALTERANDO O PAYLOD !!!
-	//  LoRa.enableCrc();
-  
   // setup callback function for reception
   LoRa.onReceive(onReceive);
   LoRa.receive();
@@ -701,7 +676,7 @@ void setup() {
 
 
 
-//-------------------------------------------------------- MAIN LOOP ---------------------------------------------------------------------
+//-------------------------------------------------------- loop -------------------------------------------------------------
 
 void loop() {
 
@@ -855,31 +830,7 @@ void loop() {
 #endif
                       obj.printTo(payload);  // stores a minified copy of the json object in char array 'payload'
                       //sprintf(payload,"Water Temperature =  %d", temp1);  // we send only 2 bytes
-                      int publish_rc = PPP_Master.publish(TOPIC_NAME, payload);
-                      if( publish_rc == 0) {
-#if DEBUG >= 1
-                      Serial.print(theDateIs());
-                      Serial.print("loop::case RESP::Published Message:");
-                      Serial.println(payload);
-#endif
-                      SSM_Status = 0;
-                      } else if ( publish_rc == -13 ) { // AWS IoT error = NETWORK_DISCONNECTED_ERROR
-#if DEBUG >= 1
-                         Serial.print(theDateIs());
-                         Serial.print("loop::case RESP::  Publish failed with error = NETWORK_DISCONNECTED_ERROR = ");
-                         Serial.println (publish_rc);
-#endif
-                         SSM_Status = 4; // check if Wi-Fi is working
-                      } else {
-#if DEBUG >= 1
-                         Serial.print(theDateIs());
-                         Serial.print("loop::case RESP::  Publish failed with error = ");
-                         Serial.println (publish_rc);
-                         // if error = -30 then a future publish may succeed. No need for further actions.
-#endif
-                         SSM_Status = 0;
 
-                      }
                       rx_buffer_tail++;   // the last byte pointed by the rx_buffer_tail has the received crc8 and we don't need it anymore
                       // SSM_Status = 0;
                       break; // WATER_TEMPERATURE  
@@ -894,36 +845,7 @@ void loop() {
     case 3:
     // State used to connect to AWS IoT
     // and subscribe to a topic.
-        if( PPP_Master.connect(HOST_ADDRESS,CLIENT_ID) == 0 ) {
-#if DEBUG >= 1
-            Serial.print(theDateIs());
-            Serial.println("setup::case 3::  Connected to AWS");
-#endif
-            delay(3000);
-            // subscribe to a topic
-            if( 0 == PPP_Master.subscribe(TOPIC_NAME, mySubCallBackHandler) ) {
-#if DEBUG >= 1
-                Serial.print(theDateIs());
-                Serial.println("setup::case 3  Subscribe Successfull");
-#endif
-                SSM_Status = 0; // go to initial state of state machine
-            } else {
-#if DEBUG >= 1
-                Serial.print(theDateIs());
-                Serial.println("setup::case 3:: Subscribe Failed, Check the Thing Name and Certificates");
-                //Serial.println("setup::case 3:: Program halted!");
-#endif
-                //while(1); // instead of halting, let' try a new connection
-                SSM_Status = 4; // try to connect to Wi-Fi again.
-            }
-        } else {
-#if DEBUG >= 1
-            Serial.print(theDateIs());
-            Serial.println("setup::  AWS connection failed, Check the HOST Address");
-            Serial.println("setup:: Program halted!");
-#endif
-            while(1); 
-        }
+
         break; // case 3
 
 
@@ -982,8 +904,6 @@ void loop() {
         break; // case 4
 
 
-
-
     default:
     // Unknown SSM_Status. Go back to initial state of SSM.
     // TO-DO: não deveríamos resetar pointers, contadores, etc?
@@ -1010,6 +930,5 @@ void loop() {
 #endif
     }
 
-    
 } // end of loop()
-// --------------------------------------------- END OF PROGRAM -----------------------------------------------------
+// ---------------------------------------------  fim do programa  -----------------------------------------------------
