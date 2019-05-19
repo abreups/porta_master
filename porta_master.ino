@@ -35,23 +35,23 @@
 
 // include libraries
 #include <SPI.h>            // comunication with radio LoRa 
-#include <LoRa.h>           // radio LoRa sx1276 lib
+#include <LoRa.h>           // radio LoRa sx1276 lib https://github.com/sandeepmistry/arduino-LoRa
 #include <Wire.h>           // comunication i2c
 
 #if OLED > 0
-#include "SSD1306.h"        // comunication with display OLED SSD1306
+#include "SSD1306.h"        // comunication with display OLED SSD1306 https://github.com/ThingPulse/esp8266-oled-ssd1306
 #endif
 
 #include <WiFi.h>           // Wi-Fi coonectivity
-#include <NTPClient.h>      // for ntp clock synchronization
+#include <NTPClient.h>      // for ntp clock synchronization https://github.com/arduino-libraries/NTPClient
 #include <WiFiUdp.h>        // for ntp clock synchronization
 //#include <AWS_IOT.h>        // AWS IoT interface
-#include <FastCRC.h>        // lib for CRC calculations
-#include <TimeLib.h>        // time functions used with ntp time
+#include <FastCRC.h>        // lib for CRC calculations https://github.com/FrankBoesing/FastCRC
+#include <TimeLib.h>        // time functions used with ntp time https://github.com/PaulStoffregen/Time
 //AWS_IOT PPP_Master;
 FastCRC8 CRC8;
 
-#include <ArduinoJson.h>     // Json library to send data to AWS (use version 5. Do not use version 6)
+#include <ArduinoJson.h>     // Json library to send data to AWS (use version 5. Do not use version 6) by Benoit Blanchon
 /*
                       JSON message we want to send:
                       prettified:
@@ -210,7 +210,7 @@ SSD1306 display(0x3c, 4, 15);   //define OLED object
 const char *ssid     = "put your wifi ssid here";
 const char *password = "put your wifi password here";
 ----  then the line below will include it in the code (adjust the path to your case) ---------*/
-#include "/Users/pauloabreu/PPP_Master_wifi_credentials.txt" // wi-fi do Paulo
+#include "C:\Users\Paulo\Documents\wifi_credenciais.txt" // wi-fi do Paulo
 
 
 WiFiUDP ntpUDP; // creates a UDP instance to send and receive packets
