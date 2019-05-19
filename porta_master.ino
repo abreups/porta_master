@@ -31,7 +31,7 @@
 ================================================================================================= */
 
 #define OLED            1   // 0 = no OLED display; 1 = otherwise
-#define DEBUG           1   // 0 = no debug messages; 1 = error messages only ; 2 = all debug messages
+#define DEBUG           2   // 0 = no debug messages; 1 = error messages only ; 2 = all debug messages
 
 // include libraries
 #include <SPI.h>            // comunication with radio LoRa 
@@ -91,7 +91,25 @@ char TOPIC_NAME[]= "$aws/things/sensorTemperatura1/shadow/update";
 #define COMMAND           0x02   // Msgtype = byte 02H - COMMAND to the slave
 #define   GPIOSET           0x00 // gpio setup (2 additional bytes: gpio_pin and gpio_value)
 
+// mensagem que vai chegar do sensor_porta:
+//      RESP        = indica que a mensagem é uma resposta enviada pelo Slave.
+//      SLAVEID     = ID que identifica o Slave que enviou a mensagem.
+//      ALARMID     = qual é o tipo de alarme que o Slave está informando.
+//      ALARMVALUE  = qual é o valor do alarme informado.
+
+// definições compatíveis com o sensor_porta
 #define RESP              0x03   // Msgtype = byte 03H - RESP - response
+
+// SLAVEID vai ser transmitido por sensor_porta
+
+// definições de ALARMID compatíveis com sensor_porta
+#define   ALARMEPORTA       0x01
+
+// definições de ALARMVALUE compatíveis com sensor_porta
+#define   PORTAABERTA       0x01
+#define   PORTAFECHADA      0x02
+
+// depois apagar tudo isso aqui.
 #define   motor_on          0x01 // motor_on              OK|NG    byte   (OK=01, NG=00)
 #define   motor_off         0x02 //- motor_off             OK|NG   
 #define   water_level       0x03 //- water_level        OK|NG   
@@ -100,12 +118,15 @@ char TOPIC_NAME[]= "$aws/things/sensorTemperatura1/shadow/update";
 #define   master_reset      0x06 //- master-reset           OK|NG    
 #define   load_motor_table  0x07 //- load_motor_table   OK|NG   
 #define   show_status       0x08 //- show_status           OK|NG  - transferir arquivo texto “status.txt”
-
-#define NTPTIME		        0x09 // payload has 4 bytes with ntp time
-
 // Alarm IDs
 #define NOWATER   0x01    //
 #define NOCLOCK   0x20    // slave clock is out of synch
+
+
+
+
+#define NTPTIME		        0x09 // payload has 4 bytes with ntp time
+
 
 // Pinout definition
 #define SCK     5          // GPIO5  -- SX127x's SCK
@@ -151,8 +172,8 @@ int     i =                             0;              // general counter
  */
 byte    rx_buffer[256];                                 // holds received bytes in callback function
 byte    rx_byte;                                        // holds 1 received byte
-byte    rx_buffer_head =                240;              // array index of rx_buffer  in callback  onReceive function
-byte    rx_buffer_tail =                240;              // array index of rx_buffer  in foreground  
+byte    rx_buffer_head =                0;              // array index of rx_buffer  in callback  onReceive function
+byte    rx_buffer_tail =                0;              // array index of rx_buffer  in foreground  
 byte    p_rx_msg =                      0;              // array index of RX_msg 
 byte    RX_msg [256];                                   // holds received bytes in foreground functions
 
@@ -238,22 +259,30 @@ void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
     msgReceived = 1;
 }
 
-
+//-------------------------------------------------------------------
 // callback function setup to process  data received by the LoRa radio
 // TO-DO: fazer função retornar TRUE ou FALSE ou algo assim
+//
 void onReceive(int packetSize) {
   if (packetSize == 0) return;                          // if there's no packet, return
+#if DEBUG >= 2
+  Serial.println("Pointers na entrada da função onReceive():");
+  Serial.println("onReceive::  rx_buffer_head = " + String(rx_buffer_head) );
+  Serial.println("onReceive::  rx_buffer_tail = " + String(rx_buffer_tail) );
+#endif  
   do {
     rx_byte = LoRa.read();                              // receives one byte
     rx_buffer[rx_buffer_head] = rx_byte;                // salves received byte in the rx_buffer
     rx_buffer_head++;                                   // points to the next position in the rx_buffer
   } while (LoRa.available());                           // until all bytes are received
 #if DEBUG >= 2
-  Serial.println ("onReceive::  rx_buffer_head = " + String (rx_buffer_head) );
-  Serial.println ("onReceive::  rx_buffer_tail = " + String (rx_buffer_tail) );
+  Serial.println("Pointers na saída da função onReceive():");
+  Serial.println("onReceive::  rx_buffer_head = " + String(rx_buffer_head) );
+  Serial.println("onReceive::  rx_buffer_tail = " + String(rx_buffer_tail) );
 #endif
 }
 
+//--------------------------------------------------------------------
 // send just 1 byte - used to send commands and responses (ENQ, ACK)
 void sendByte (byte tx_byte) {   
   LoRa.beginPacket();                                   // start packet
@@ -262,6 +291,7 @@ void sendByte (byte tx_byte) {
   LoRa.receive();                                       // you must make Lora listen to reception again !!
 }
 
+//----------------------------------------------------------------
 // Function used to calculate the length of the message
 // stored at the rx_buffer or tx_buffer
 byte difference (byte b, byte a) {
@@ -272,8 +302,9 @@ byte difference (byte b, byte a) {
   }
 }
 
-
-// send a buffer of bytes
+//-----------------------------------------------------------------
+// sendBuffer(): send a buffer of bytes
+//
 void sendBuffer() {
   byte temp_buffer [256];
   byte i = 0 , j = 0, crcCalculated =0;
@@ -336,46 +367,49 @@ boolean received() {
   byte temp_buffer [256];
   byte i = 0 , j = 0;
   int  buffer_size = 0;
-  
 
-  if (rx_buffer_head != rx_buffer_tail) {
+  if (rx_buffer_head != rx_buffer_tail) { // há algo no rx_buffer
 #if DEBUG >= 2
-      // for debug purposes only
-      Serial.print(theDateIs()); Serial.print("received::   rx_buffer_head = "); Serial.println(rx_buffer_head);
-      Serial.print(theDateIs()); Serial.print("received::   rx_buffer_tail = "); Serial.println(rx_buffer_tail);
+      Serial.print(theDateIs()); Serial.print("received::rx_buffer_head = "); Serial.println(rx_buffer_head);
+      Serial.print(theDateIs()); Serial.print("received::rx_buffer_tail = "); Serial.println(rx_buffer_tail);
 #endif
-
       j = rx_buffer_tail;
       buffer_size = difference (rx_buffer_head, rx_buffer_tail);
-      Serial.print(theDateIs()); Serial.print("\nbuffer size = ");
-      Serial.println (buffer_size);
-      
+#if DEBUG >= 2
+      Serial.print(theDateIs()); Serial.print("\nbuffer size = ");Serial.println (buffer_size);
       Serial.print(theDateIs()); Serial.println("rx_buffer:");
-      for (i = 0; i< buffer_size; i++) {
-        temp_buffer[i] = rx_buffer [j];
-        Serial.print(rx_buffer[j],HEX);
-        Serial.print("-");
-        j++;
+#endif      
+      for (i = 0; i < buffer_size; i++) {
+          temp_buffer[i] = rx_buffer [j];
+#if DEBUG >= 2
+          Serial.print(rx_buffer[j],HEX);Serial.print("-");
+#endif          
+          j++;
       }
-      Serial.print(theDateIs()); Serial.println("\ntemp_buffer:");
-      for (i = 0; i< buffer_size; i++) {
-        Serial.print(temp_buffer[i],HEX);
-        Serial.print("+");
+#if DEBUG >= 2
+      Serial.print(theDateIs()); Serial.println("\ntemp_buffer:");      
+      for (i = 0; i < buffer_size; i++) {
+        Serial.print(temp_buffer[i],HEX);Serial.print("+");
       }
-      buffer_size--; 
-      Serial.print(theDateIs()); Serial.print("\nbuffer size recalculado = ");
-      Serial.println (buffer_size);
+#endif  
+      // Esse negócio de diminuir o buffer size está dando erro no recálculo do CRC.    
+      //buffer_size--; 
+      //Serial.print(theDateIs()); Serial.print("\nbuffer size recalculado = ");
+      //Serial.println (buffer_size);
       crcCalculated = CRC8.smbus(temp_buffer, buffer_size); 
-      
-//      crcCalculated = CRC8.smbus(&rx_buffer[rx_buffer_tail], difference(rx_buffer_head, rx_buffer_tail) - 1 ); // calculates the payload crc8. it does not included the received crc byte 
-      crcReceived = rx_buffer[rx_buffer_head-1];   // back one position as the head is always pointing to the next received byte. The CRC8 is at one position back 
 
+      // calculates the payload crc8. it does not included the received crc byte       
+      // crcCalculated = CRC8.smbus(&rx_buffer[rx_buffer_tail], difference(rx_buffer_head, rx_buffer_tail) - 1 );
+
+      // back one position as the head is always pointing to the next received byte. The CRC8 is at one position back 
+      crcReceived = rx_buffer[rx_buffer_head-1];   
 
 #if DEBUG >= 2
-      Serial.print(theDateIs()); Serial.print("\nreceived::   crcCalculated = "); Serial.println(crcCalculated,HEX); // shows boths crcs
-      Serial.print(theDateIs()); Serial.print("received::   crcReceived   = "); Serial.println(crcReceived,HEX);
-      Serial.print(theDateIs()); Serial.print("received::  ");
-      for (i=rx_buffer_tail; i< rx_buffer_head;i++) {   // prints the rxed buffer byes
+      // shows boths crcs
+      Serial.print(theDateIs()); Serial.print("\nreceived::crcCalculated = "); Serial.println(crcCalculated,HEX);
+      Serial.print(theDateIs()); Serial.print("received::crcReceived  = "); Serial.println(crcReceived,HEX);
+      Serial.print(theDateIs()); Serial.print("received:: ");
+      for (i=rx_buffer_tail; i < rx_buffer_head;i++) {   // prints the rxed buffer byes
         Serial.print(rx_buffer[i],HEX);
         Serial.print("-");
       }
@@ -384,26 +418,14 @@ boolean received() {
       if (crcCalculated != crcReceived) {   // if we had a crc error
          rx_buffer_tail = rx_buffer_head;    // discard the received msg
 #if DEBUG >= 1
-         Serial.print(theDateIs()); Serial.println("received::  CRC ERROR - msg deleted !!");
+         Serial.print(theDateIs()); Serial.println("received::CRC ERROR - mensagem apagada!");
 #endif
          return (false);
       }
   }
-  return (rx_buffer_head != rx_buffer_tail);
+  return (rx_buffer_head != rx_buffer_tail); // TRUE=?
 }  // end of received()
 
-/*
-void showRxmsgCount () {
-    Serial.println("Msg received from SLAVE");
-    RxmsgCount++;
-#if OLED > 0
-    display.clear(); //apaga todo o conteúdo da tela do display
-    display.drawString(0, 0, " Msg received OK!");
-    display.drawString(40, 26, String(RxmsgCount));
-    display.display(); 
-#endif
-}
-*/
 
 
 // ------------------------------ theDateIs() --------------------------------
@@ -486,6 +508,11 @@ String theDateIs() {
  ------------------------------------------------------------------------------------------ */
 
 // ------------------------------ gpioSetup() --------------------------------
+// Pra que serve essa função mesmo?
+/* ---------------------------------------------------------------------------------------
+ *  teste de comando do master para o slave
+ *  colocada em setup para testes, depois deverá ser adicionada a SSM
+ ------------------------------------------------------------------------------------------ */
 void gpioSetup (byte gpio_pin, byte gpio_value) {
   tx_buffer[tx_buffer_head++] = HEADER;     // starts with a HEADER
   tx_buffer[tx_buffer_head++] = 0x04;       // payload length
@@ -496,7 +523,7 @@ void gpioSetup (byte gpio_pin, byte gpio_value) {
   sendBuffer();                             // transmitts to slave
 #if DEBUG >= 1
   Serial.print(theDateIs());
-  Serial.println("gpioSetup::  Seting the GPIO up !!");
+  Serial.println("gpioSetup::  Seting the GPIO up no slave?");
 #endif
 } // end of gpioSetup
 
@@ -504,11 +531,11 @@ void gpioSetup (byte gpio_pin, byte gpio_value) {
 // ------------------------------------------------------- setup  ----------------------------------------------------------------
 
 void setup() {
-  Serial.begin(115200);                   
+  Serial.begin(115200);
   while (!Serial);
 #if DEBUG >= 1
 
-  Serial.println("setup:: This is the PPP LoRa Halfduplex Master");
+  Serial.println("setup::Serial OK.");
 
 #endif
 #if OLED > 0
@@ -522,11 +549,11 @@ void setup() {
   display.flipScreenVertically(); 
   display.setFont(ArialMT_Plain_10);
   // Displays that we will connect to Wi-Fi
-  display.drawString(0, 0, "Connecting to Wi-Fi");
+  display.drawString(0, 0, "Conectando ao Wi-Fi");
   display.display();
 #endif
 #if DEBUG >= 1
-    Serial.print("Attempting to connect to Wi-Fi ");
+    Serial.print("Conectando ao Wi-Fi ");
 #endif
 
   // Connects to Wi-Fi
@@ -549,53 +576,56 @@ void setup() {
   if (count == 60) {
 #if OLED > 0
     display.clear();
-    display.drawString(0, 0, "Wi-Fi connection failure");
+    display.drawString(0, 0, "Wi-Fi - conexão falhou");
     display.display();
 #endif
 #if DEBUG >= 1
 
-    Serial.println("setup::  Wi-Fi connection failed.");
-    Serial.println("System halted!");
+    Serial.println("setup::  Wi-Fi - conexão falhou.");
+    Serial.println("Sistema congelado!");
 
 #endif
     while(true);    // infinite loop due to failure
   } else {
 #if OLED > 0
     display.clear();
-    display.drawString(0, 0, "Connected to Wi-Fi");
-    display.drawString(0, 10, WiFi.SSID());
-    display.drawString(0, 20, WiFi.localIP().toString());
+    display.drawString(0, 0, "Conectado ao Wi-Fi");
+    display.drawString(0, 10, WiFi.SSID());               // mostra ssid no display
+    display.drawString(0, 20, WiFi.localIP().toString()); // mostra IP no display
     display.display();
 #endif
-    Serial.println(" Connected!");
+    Serial.println("Wi-Fi conectado!");
   }
 
   // initializes ntp client
   timeClient.begin();
   timeClient.update();
-  delay(5000);                          // if we don' wait, forceUpdate does not update
-  timeClient.forceUpdate();             // otherwise the date and time may be wrong (vai entender...)
-  ntpTime = timeClient.getEpochTime();  // gets ntp time
-  setTime(ntpTime);                     // sets local clock
+  delay(5000);                          // se não esperarmos, forceUpdate() não atualiza.
+  timeClient.forceUpdate();             // se não for chamada, data e horário podem ficar errados (vai entender...).
+  ntpTime = timeClient.getEpochTime();  // obtém data e horário do serviço ntp.
+  setTime(ntpTime);                     // acerta o relógio local do ESP32.
 #if DEBUG >= 1
-  Serial.print("setup::  Time set to: ");
+  Serial.print("setup::relógio ajustado para: ");
   String stringDate = String(weekday()) + " " + String(day()) + "/" + String(month()) + "/" + String(year()) + " " + String(hour()) + ":" + String(minute());
-  Serial.print("setup::  ");
+  Serial.print("setup::");
   Serial.println(stringDate);
 #endif
 
+
+// depois apagar isso. Não estamos enviando o horário para o slave.
   // stores ntp time in byte units (to send to slave via LoRa)
   CP1 = (ntpTime & 0xff000000UL) >> 24;		// most significant byte
   CP2 = (ntpTime & 0x00ff0000UL) >> 16;
   CP3 = (ntpTime & 0x0000ff00UL) >>  8;
   CP4 = (ntpTime & 0x000000ffUL)      ;		// least significant byte
 
-  // for debug only:
-  //Serial.print("CP1 = 0x"); Serial.println(CP1, HEX);
-  //Serial.print("CP2 = 0x"); Serial.println(CP2, HEX);
-  //Serial.print("CP3 = 0x"); Serial.println(CP3, HEX);
-  //Serial.print("CP4 = 0x"); Serial.println(CP4, HEX);
-
+#if DEBUG >= 2
+  Serial.println("Variáveis do ntp:");
+  Serial.print("CP1 = 0x"); Serial.println(CP1, HEX);
+  Serial.print("CP2 = 0x"); Serial.println(CP2, HEX);
+  Serial.print("CP3 = 0x"); Serial.println(CP3, HEX);
+  Serial.print("CP4 = 0x"); Serial.println(CP4, HEX);
+#endif
   /*
       How to convert EpochTime to FormattedTime:
       From https://github.com/arduino-libraries/NTPClient/blob/master/NTPClient.cpp
@@ -608,14 +638,12 @@ void setup() {
   String secondStr = seconds < 10 ? "0" + String(seconds) : String(seconds);
   Serial.print("The time now is: "); Serial.println(hoursStr + ":" + minuteStr + ":" + secondStr);
 */
-
-
-  delay(5000);
+  delay(3000);
 #if OLED > 0
   display.clear();
   display.drawString(0, 0, "MASTER OK!");
   display.display(); 
-  delay(5000);
+  delay(3000);
   display.clear();      // clears text in OLED display
 #endif
 
@@ -627,10 +655,10 @@ void setup() {
   if (!LoRa.begin(BAND)) {
 #if DEBUG >= 1
     Serial.print(theDateIs());      
-    Serial.println("setup::  LoRa init failed. Check your connections.");
+    Serial.println("setup::LoRa falhou na inicialização.");
 #endif
 #if OLED > 0
-    display.drawString(0, 0, "Starting LoRa failed!");
+    display.drawString(0, 0, "LoRa - inicialização falhou!");
     display.display();                  
 #endif
     while (true);                                 // if failed, do nothing forever
@@ -641,39 +669,40 @@ void setup() {
   LoRa.receive();
 #if DEBUG >= 1
   Serial.print(theDateIs());
-  Serial.println("LoRa start OK!");
+  Serial.println("LoRa OK");
 #endif
 #if OLED > 0
-  display.drawString(0, 0, " LoRa started OK!");
+  display.drawString(0, 0, " LoRa OK!");
   display.display();
 #endif
   delay (2000);
 
+
+
+//  acho que não precisamos disso.
 /* ---------------------------------------------------------------------------------------
  *  teste de comando do master para o slave
  *  colocada em setup para testes, depois deverá ser adicionada a SSM
  ------------------------------------------------------------------------------------------ */
-
-  gpioSetup (25, 1);
+/*  gpioSetup (25, 1);
 #if DEBUG >= 2
   Serial.print(theDateIs());
   Serial.println("gpioSetup::  Seting the LED on !!");
 #endif
-
   delay (200);
-
   gpioSetup (25, 0);
 #if DEBUG >= 2
   Serial.print(theDateIs());
   Serial.println("gpioSetup::  Seting the LED off !!");
 #endif
+*/
+
+
 
   
   SSM_Status = 0; // initial status of the SSM
 
-
 } // end of setup()
-
 
 
 //-------------------------------------------------------- loop -------------------------------------------------------------
