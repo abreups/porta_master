@@ -231,7 +231,7 @@ SSD1306 display(0x3c, 4, 15);   //define OLED object
 const char *ssid     = "put your wifi ssid here";
 const char *password = "put your wifi password here";
 ----  then the line below will include it in the code (adjust the path to your case) ---------*/
-#include "C:\Users\Paulo\Documents\wifi_credenciais.txt" // wi-fi do Paulo
+#include "/home/paulo/wifi_credenciais.txt" // wi-fi do Paulo
 
 
 WiFiUDP ntpUDP; // creates a UDP instance to send and receive packets
@@ -361,6 +361,13 @@ void sendBuffer() {
 // returns:
 //    FALSE if nothing has been received by the LoRa radio yet
 //    TRUE  if something has been received by the LoRa radio
+//
+// A mensagem recebida (se for somente uma mensagem...) começa 
+// na posição apontada por rx_buffer_tail e termina na posição rx_buffer_head-1
+// (rx_buffer_head aponta para a próxima posição livre no buffer).
+// O CRC está na última posição da mensagem, portanto está na
+// posição rx_buffer_head-1.
+//
 boolean received() {
 
   byte crcReceived, crcCalculated=0;
@@ -369,61 +376,61 @@ boolean received() {
   int  buffer_size = 0;
 
   if (rx_buffer_head != rx_buffer_tail) { // há algo no rx_buffer
+    crcReceived = rx_buffer[rx_buffer_head-1];
 #if DEBUG >= 2
       Serial.print(theDateIs()); Serial.print("received::rx_buffer_head = "); Serial.println(rx_buffer_head);
       Serial.print(theDateIs()); Serial.print("received::rx_buffer_tail = "); Serial.println(rx_buffer_tail);
+      Serial.print(theDateIs()); Serial.print("received::CRC recebido = "); Serial.println(crcReceived, HEX);
 #endif
       j = rx_buffer_tail;
       buffer_size = difference (rx_buffer_head, rx_buffer_tail);
 #if DEBUG >= 2
-      Serial.print(theDateIs()); Serial.print("\nbuffer size = ");Serial.println (buffer_size);
-      Serial.print(theDateIs()); Serial.println("rx_buffer:");
-#endif      
-      for (i = 0; i < buffer_size; i++) {
-          temp_buffer[i] = rx_buffer [j];
-#if DEBUG >= 2
+      Serial.print(theDateIs()); Serial.print("received::buffer size = ");Serial.println (buffer_size);
+      Serial.print(theDateIs()); Serial.print("received::rx_buffer[] = ");
+      for (i = 0; i < (buffer_size); i++) {
+          //Serial.print("j = ");Serial.print(j); Serial.print("; i = ");Serial.println(i);
           Serial.print(rx_buffer[j],HEX);Serial.print("-");
-#endif          
           j++;
       }
+      Serial.println();
+#endif      
+      //buffer_size--; // não queremos copiar o CRC para o buffer local pois calcularemos o CRC a partir dos dados recebidos
+
+      // copia rx_buffer (global) para temp_buffer (local) sem o CRC
+      j = rx_buffer_tail;
+      for (i = 0; i < (buffer_size-1); i++) {
+          temp_buffer[i] = rx_buffer [j];
+          j++;
+      }
+
 #if DEBUG >= 2
-      Serial.print(theDateIs()); Serial.println("\ntemp_buffer:");      
-      for (i = 0; i < buffer_size; i++) {
+      // Mostra temp_buffer[] para conferência.
+      Serial.print(theDateIs()); Serial.print("received::temp_buffer[] (sem CRC) = ");
+      for (i = 0; i < buffer_size-1; i++) {
         Serial.print(temp_buffer[i],HEX);Serial.print("+");
       }
-#endif  
-      // Esse negócio de diminuir o buffer size está dando erro no recálculo do CRC.    
-      //buffer_size--; 
-      //Serial.print(theDateIs()); Serial.print("\nbuffer size recalculado = ");
-      //Serial.println (buffer_size);
-      crcCalculated = CRC8.smbus(temp_buffer, buffer_size); 
-
-      // calculates the payload crc8. it does not included the received crc byte       
-      // crcCalculated = CRC8.smbus(&rx_buffer[rx_buffer_tail], difference(rx_buffer_head, rx_buffer_tail) - 1 );
-
-      // back one position as the head is always pointing to the next received byte. The CRC8 is at one position back 
-      crcReceived = rx_buffer[rx_buffer_head-1];   
-
-#if DEBUG >= 2
-      // shows boths crcs
-      Serial.print(theDateIs()); Serial.print("\nreceived::crcCalculated = "); Serial.println(crcCalculated,HEX);
-      Serial.print(theDateIs()); Serial.print("received::crcReceived  = "); Serial.println(crcReceived,HEX);
-      Serial.print(theDateIs()); Serial.print("received:: ");
-      for (i=rx_buffer_tail; i < rx_buffer_head;i++) {   // prints the rxed buffer byes
-        Serial.print(rx_buffer[i],HEX);
-        Serial.print("-");
-      }
       Serial.println();
-#endif
+#endif  
+      //buffer_size--;
+      Serial.print(theDateIs()); Serial.print("received::buffer size sem CRC = "); Serial.println (buffer_size-1);
+      crcCalculated = CRC8.smbus(temp_buffer, buffer_size-1); 
+      Serial.print(theDateIs()); Serial.print("received::crcCalculated = "); Serial.println(crcCalculated,HEX);
       if (crcCalculated != crcReceived) {   // if we had a crc error
-         rx_buffer_tail = rx_buffer_head;    // discard the received msg
+         rx_buffer_tail = rx_buffer_head;    // discard the received msg (ASSUME QUE SÓ 1 MENSAGEM FOI RECEBIDA!)
 #if DEBUG >= 1
          Serial.print(theDateIs()); Serial.println("received::CRC ERROR - mensagem apagada!");
 #endif
          return (false);
+      } else {
+          Serial.print(theDateIs()); Serial.println("Há dados válidos em rx_buffer[].");
+          return(true);
       }
+      
+  } else {
+      // não há nada em rx_buffer[]
+      return(false);
   }
-  return (rx_buffer_head != rx_buffer_tail); // TRUE=?
+  //return (rx_buffer_head != rx_buffer_tail); // TRUE=?
 }  // end of received()
 
 
@@ -598,6 +605,7 @@ void setup() {
   }
 
   // initializes ntp client
+  Serial.println("Iniciando cliente ntp.");
   timeClient.begin();
   timeClient.update();
   delay(5000);                          // se não esperarmos, forceUpdate() não atualiza.
@@ -611,7 +619,7 @@ void setup() {
   Serial.println(stringDate);
 #endif
 
-
+/*
 // depois apagar isso. Não estamos enviando o horário para o slave.
   // stores ntp time in byte units (to send to slave via LoRa)
   CP1 = (ntpTime & 0xff000000UL) >> 24;		// most significant byte
@@ -626,6 +634,7 @@ void setup() {
   Serial.print("CP3 = 0x"); Serial.println(CP3, HEX);
   Serial.print("CP4 = 0x"); Serial.println(CP4, HEX);
 #endif
+*/
   /*
       How to convert EpochTime to FormattedTime:
       From https://github.com/arduino-libraries/NTPClient/blob/master/NTPClient.cpp
@@ -647,6 +656,7 @@ void setup() {
   display.clear();      // clears text in OLED display
 #endif
 
+  Serial.println("Iniciando rádio LoRa.");
   // overide the default CS, reset, and IRQ pins (optional)
   SPI.begin(SCK,MISO,MOSI,SS);                    // start SPI with LoRa
   LoRa.setPins(SS, RST, DI00);                    // set CS, reset, IRQ pin
