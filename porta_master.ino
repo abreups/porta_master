@@ -359,8 +359,8 @@ void sendBuffer() {
 // ------------------------------ received() --------------------------------
 // check if there are bytes in the Rx buffer
 // returns:
-//    FALSE if nothing has been received by the LoRa radio yet
-//    TRUE  if something has been received by the LoRa radio
+//    FALSE se nada foi recebido em rx_buffer[]
+//    TRUE  se algo foi recebido em rx_buffer[] e o CRC está correto (ou seja, a mensagem é válida).
 //
 // A mensagem recebida (se for somente uma mensagem...) começa 
 // na posição apontada por rx_buffer_tail e termina na posição rx_buffer_head-1
@@ -722,252 +722,101 @@ void loop() {
   // SSM (software State Machine)
   switch (SSM_Status) {
 
-
-    case 0:
-    // Initial state of the SSM
-    // Tests if a message was received and if so 
-    // identifies if the message is just an ACK or HEADER (if it holds data to be processed)
-
-    		if (received()) {                              // if there are bytes in the rx Buffer and they are OK -> no CRC errors
-      			switch (rx_buffer[rx_buffer_tail++]) {   
-					case ACK:
-                    // An ACK is typically the response to an ENQ from the MASTER when the slave 
-                    // did not have anything to send.
-#if DEBUG >= 1
-                  Serial.print(theDateIs());
-          				Serial.println("loop::  ACK from Slave ");      // ACK received - do nothing
-#endif
-          				break; // case ACK
-        
-        			case HEADER:										// slave sent a msg
-                    // If a HEADER was received, this means the slave has sent some data in response to
-                    // a master request or the slave may have sent an alarm.
-#if DEBUG >= 1
-                        Serial.print(theDateIs());
-                        Serial.println("loop::  HEADER received from Slave");
-#endif
-                        SSM_Status = 1;
-                        break; // case HEADER
-               
-      			} // end of switch
-    		} // end of 'if( received() )'
-            break; // case 0
+      case 0:
+      // Estado inicial da Máquina de Estados.
+      // Testa se os dados são válidos (não há erros de CRC) e processa o
+      // primeiro byte da mensagem.
+  
+      		if (received()) { // se há dados válidos em rx_buffer[]
+        			switch (rx_buffer[rx_buffer_tail]) {   
+              
+  				        case RESP:
+                      // Temos uma mensagem (RESPosta) vinda de um Slave.
+                      // Os próximos 4 bytes são SLAVEID, ALARMID, ALARMVALUE e CRC.
+#if DEBUG >= 2
+                      Serial.print(theDateIs());Serial.println("loop::RESP recebido de um Slave.");
+                      //Serial.print(theDateIs());Serial.print("loop::SLAVEID = ");Serial.println(rx_buffer[rx_buffer_tail+1]);
+                      //Serial.print(theDateIs());Serial.print("loop::ALARMID = ");Serial.println(rx_buffer[rx_buffer_tail+2]);
+                      //Serial.print(theDateIs());Serial.print("loop::ALARMVALUE = ");Serial.println(rx_buffer[rx_buffer_tail+3]);
+#endif                    
+                      // prepara para processar o próximo byte da mensagem
+                      rx_buffer_tail++; 
+                      SSM_Status = 1;
+                      break; // case RESP
+					
+      			  } // end of switch
+    		  } // end of 'if( received() )'
+          break; // case 0
 
 
     case 1:
-    // Previous state should have been 0 and a HEADER was found.
-    // So now we need to get the message length (msglength).
-        msglength = rx_buffer[rx_buffer_tail++];        // now the byte pointed by rx_buffer_tail is the message lenght
-        //p_rx_msg = 0;
-        SSM_Status = 2;                                     // change SSM to 2: lets get the rest of the msg received
+    // Estado anterior deveria ter sido o 0.
+    // Estado 1 processa o ID do Slave.
+#if DEBUG >= 1
+        Serial.print(theDateIs());Serial.print("loop::SLAVEID = ");Serial.println(rx_buffer[rx_buffer_tail]);
+#endif
+
+        // Aqui podemos colocar tratamentos diferentes dependendo de qual Slave veio a mensagem.
+        
+        // prepara para processar o próximo byte da mensagem
+        rx_buffer_tail++; 
+        SSM_Status = 2;
         break; // case 1
 
 
     case 2:
-    // This state processes the content of the payload.
-    // The payload length (msglength) was obtained in state 1.
+    // Estado anterior deveria ter sido o 1.
+    // Estado 2 processa o ALARMID.
 #if DEBUG >= 1
-        Serial.print(theDateIs());
-        Serial.println("loop::  Entering State 2");
+        Serial.print(theDateIs());Serial.print("loop::ALARMID = ");Serial.println(rx_buffer[rx_buffer_tail]);
 #endif
-        switch(rx_buffer[rx_buffer_tail++]) { // capture and treat the type of message
 
-          case ALARM:
-          // See what the slave is alarmed about and respond
-              msglength--;
-              switch(rx_buffer[rx_buffer_tail++]) { // treats the type of alarm
-                  case NOCLOCK:
-#if DEBUG >= 1
-                      Serial.print(theDateIs());
-                      Serial.println("loop::  Alarm, No Clock");
-#endif
-                      // slave is asking for ntp time. Get it and send it to slave.
-                      msglength--;
-                      ntpTime = timeClient.getEpochTime(); // get current time
-                      CP1 = (ntpTime & 0xff000000UL) >> 24;
-                      CP2 = (ntpTime & 0x00ff0000UL) >> 16;
-                      CP3 = (ntpTime & 0x0000ff00UL) >>  8;
-                      CP4 = (ntpTime & 0x000000ffUL)      ;
-                      // prepares message to be transmitted to slave
-                      tx_buffer[tx_buffer_head++] = HEADER;   // starts with a HEADER
-                      tx_buffer[tx_buffer_head++] = 0x05;     // payload length
-                      tx_buffer[tx_buffer_head++] = NTPTIME;  // type of payload
-                      tx_buffer[tx_buffer_head++] = CP1;      // most significant byte
-                      tx_buffer[tx_buffer_head++] = CP2;
-                      tx_buffer[tx_buffer_head++] = CP3;
-                      tx_buffer[tx_buffer_head++] = CP4;      // least significant byte
-                      sendBuffer();                           // transmitts to slave
-                      rx_buffer_tail++;                       // ???  pq mesmo ??? the last byte pointed by the rx_buffer_tail has the  received crc8. Discard it
-                      SSM_Status = 0;                         // go back to initial state of SSM
-                      break; // case NOCLOCK
-                  
-                  default:
-                  // in case we have not identified the message, go back to initial state of SSM
-#if DEBUG >= 1
-                      Serial.print(theDateIs());
-                      Serial.println("loop::  When attempting to process an ALARM, type of alarm not identified.");
-#endif
-#if DEBUG >= 2
-                      // for debug purposes only
-                      Serial.print(theDateIs()); Serial.println("Buffers:");
-                      Serial.println("loop::  rx_buffer_head = "); Serial.println(rx_buffer_head);
-                      Serial.println("loop::  rx_buffer_tail = "); Serial.println(rx_buffer_tail);
-#endif
-                      SSM_Status = 0;
-                      break;
-                    
-              } // end of inner switch()
-              break; // case ALARM
-
-    
-          case RESP:
-               //msglength--;
-               switch (rx_buffer[rx_buffer_tail++]) {                  // analizing RESPonse Type
-                  case WATER_TEMPERATURE :                             // a temperature sensor just sent its value
-                      int16_t temp1 = 0;                                // it is a 16bit value = unsigned integer
-                      float temp2 = 0;                                  // the temperature is in fact a float value
-#if DEBUG >= 1
-
-                      Serial.print(theDateIs());
-                      Serial.println("loop::case RESP::  Response, Temperature");
-
-#endif
-                      temp1 = rx_buffer[rx_buffer_tail++]<<8;           // the MSB was transmitted first, so we shift left it by 8 bits
-                      //msglength--;                                      // 
-                      temp1 = temp1 | rx_buffer[rx_buffer_tail++];      // the LSB was sent after MSB so we need just to "OR" with the previous value
-                      //msglength--;                                      //
-                      temp2 = (float)temp1/16.0;  // in oC              // to calculate it in Celcius just divide by 16.0. The casting (float) forces a float result
-                                                                       // if you need:  fahrenheit = celsius * 1.8 + 32.0;
-                      CP1 = rx_buffer[rx_buffer_tail++];
-                      CP2 = rx_buffer[rx_buffer_tail++];
-                      CP3 = rx_buffer[rx_buffer_tail++];
-                      CP4 = rx_buffer[rx_buffer_tail++];
-
-#if DEBUG >= 1
-                      Serial.print(theDateIs());
-                      Serial.print ("loop::case RESP::  Water Temperature received = ");   // shows it for debuging
-                      Serial.print (temp2);
-                      Serial.println ("oC");
-                      
-                      Serial.print(theDateIs()); Serial.print("CP1 = 0x"); Serial.println(CP1, HEX);  // shows timestamp 4 bytes (epoch time)
-                      Serial.print(theDateIs()); Serial.print("CP2 = 0x"); Serial.println(CP2, HEX);
-                      Serial.print(theDateIs()); Serial.print("CP3 = 0x"); Serial.println(CP3, HEX);  // serializar JASON antes de publicar
-                      Serial.print(theDateIs()); Serial.print("CP4 = 0x"); Serial.println(CP4, HEX);
-                                          
-#endif
-                      // lets send the temperature to AWS as a Json object:
-                      // Step1: allocate JsonBuffer
-                      const int capacity = JSON_OBJECT_SIZE(2); // 2 because there are two items in Json message
-                      StaticJsonBuffer<capacity> jb;            // uses the stack to allocate the space
-                      // Step2: Create a JsonObject
-                      JsonObject& obj = jb.createObject();
-                      // Step3: add the values
-                      obj["waterTempTimestamp"] = (CP1 << 24) | (CP2 << 16) | (CP3 << 8) | CP4;
-                      obj["waterTempValue"] = temp1;
-#if DEBUG >= 1
-                      Serial.print(theDateIs()); obj.prettyPrintTo(Serial);
-#endif
-                      obj.printTo(payload);  // stores a minified copy of the json object in char array 'payload'
-                      //sprintf(payload,"Water Temperature =  %d", temp1);  // we send only 2 bytes
-
-                      rx_buffer_tail++;   // the last byte pointed by the rx_buffer_tail has the received crc8 and we don't need it anymore
-                      // SSM_Status = 0;
-                      break; // WATER_TEMPERATURE  
-             
-               } // end of switch() WATER_TEMPERATURE
-               break; // case RESP
-
-        } // end of switch() for ALARM, RESP
+        // Aqui podemos colocar tratamentos diferentes dependendo do ALARMID.
+        
+        // prepara para processar o próximo byte da mensagem
+        rx_buffer_tail++; 
+        SSM_Status = 3;
         break; // case 2
 
 
     case 3:
-    // State used to connect to AWS IoT
-    // and subscribe to a topic.
+    // Estado anterior deveria ter sido o 2.
+    // Estado 3 processa o ALARMVALUE.
+#if DEBUG >= 1
+        Serial.print(theDateIs());Serial.print("loop::ALARMVALUE = ");Serial.println(rx_buffer[rx_buffer_tail]);
+#endif
 
+        // Aqui podemos colocar tratamentos diferentes dependendo do ALARMVALUE.
+        
+        // prepara para processar o próximo byte da mensagem
+        rx_buffer_tail++; 
+        SSM_Status = 4;
         break; // case 3
 
 
-
     case 4:
-    { // chave evita erro de compilação "error jump to case label"
-      // https://stackoverflow.com/questions/5685471/error-jump-to-case-label#5685578
-    // Id we lost Wi-Fi connectivity, attempt to reconnect.
+    // Estado anterior deveria ter sido o 3.
+    // Estado 4 só descarta o CRC.
 
-#if DEBUG >= 1
-        Serial.print(theDateIs());
-        Serial.print("Wi-Fi status = "); Serial.println(WiFi.status());
-#endif
-        if (WiFi.status() != WL_CONNECTED) {
-            WiFi.begin(ssid, password);
-        }
-        // aguarda a conexão à rede Wi-Fi
-        // Sai do loop se 60 * 500ms = 30s se passarem sem
-        // que conexão seja estabelecida.
-        int count2 = 0;
-        while ( WiFi.status() != WL_CONNECTED && count2 < 60) {
-          // simulates a bar in the display (with the letter o) to show Wi-Fi progress
-          delay ( 500 );
-          count2++;
-#if OLED > 0
-          display.drawString(count2, 10, "o");
-          display.display();
-#endif
-          Serial.print(".");
-        } // end while
-        if (count2 == 60) {
-#if OLED > 0
-          display.clear();
-          display.drawString(0, 0, "Wi-Fi connection failure");
-          display.display();
-#endif
-#if DEBUG >= 1
-          Serial.print(theDateIs());
-          Serial.println("setup::  Wi-Fi connection failed.");
-          Serial.println("Setting SSM_Status to 4.");
-#endif
-          SSM_Status = 4; // try a new reconnection
-        } else {
-#if OLED > 0
-          display.clear();
-          display.drawString(0, 0, "Connected to Wi-Fi");
-          display.drawString(0, 10, WiFi.SSID());
-          display.drawString(0, 20, WiFi.localIP().toString());
-          display.display();
-#endif
-          Serial.print(theDateIs());
-          Serial.println("setup:: Connected to Wi-Fi");
-          SSM_Status = 3; // now try to reconnect to AWS IoT
-        }
-    }
+        // descarta o byte do CRC.
+        rx_buffer_tail++; 
+        SSM_Status = 0; // coloca a Máquina de Estados em seu estado inicial
         break; // case 4
 
 
     default:
-    // Unknown SSM_Status. Go back to initial state of SSM.
-    // TO-DO: não deveríamos resetar pointers, contadores, etc?
+    // Estado desconhecido.
+    // Descarta o conteúdo de rx_buffer e coloca a Máquina de Estados em seu estado inicial.
 #if DEBUG >= 1
-
-        Serial.print(theDateIs());
-        Serial.print("loop::  undefined state! - reseting to Status = 0  - Status= ");
-        Serial.println (SSM_Status);
+        Serial.print(theDateIs());Serial.print("loop::Estado indefinido = ");Serial.println (SSM_Status);
+        Serial.println("Colocando Máquina de Estados no estado inicial.");
 #endif
+        rx_buffer_tail = rx_buffer_head;
         SSM_Status = 0;
         break;
   } // end of switch(SSM_Status)
 
 
-
-    // AWS IoT session - checks if we received any msg from AWS IoT platform
-    // inicially it will be only the published msg echo 
-    if(msgReceived == 1)  {                        
-        msgReceived = 0;
-#if DEBUG >= 1
-        Serial.print(theDateIs());
-        Serial.print("loop::  Received Message from AWS: ");
-        Serial.println(rcvdPayload);
-#endif
-    }
 
 } // end of loop()
 // ---------------------------------------------  fim do programa  -----------------------------------------------------
