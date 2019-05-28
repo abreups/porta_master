@@ -1,32 +1,10 @@
 /* ===============================================================================================
-  LoRa HalfDuplex communication wth callback - 13/06/18
+  porta_master
 
-  MASTER - teste
+  Para ser usado junto com sensor_porta.
 
-  Sends a message every  8-10 seconds, and polls SLAVE (see slave.ino) every 4-5 seconds
-  Uses callback for new incoming messages. 
-  Not implements callback for transmission (yet!!)
-
-  Formats:
-
-  enq = x05 - 1 byte
-  ack = x06 - 1 byte
-
-  msg { 
-   header  = 1byte (xFF)
-   payloadlen = 1byte (0..xFF)
-   payload  = array byte [255]
-   crc8      = 1 byte1              //Fast CRC8
-   
-   //  add in the LoRa link layer  https://www.libelium.com/forum/viewtopic.php?t=24813 - INVESTIGAR - ESTA ALTERANDO O PAYLOD !!!
-  }
-
-  Note: while sending, LoRa radio is not listening for incoming messages.
-  Note2: when using the callback method, you can't use any of the Stream
-  functions that rely on the timeout, such as readString, parseInt(), etc.
-
-  created by Evaldo Nascimento and Paulo Abreu in 27 may 2018
-  based on the original version by Tom Igoe - https://github.com/tigoe/NetworkExamples
+  Autor: Paulo S. Abreu
+  Versão 1: maio-2019
   
 ================================================================================================= */
 
@@ -394,7 +372,6 @@ boolean received() {
       }
       Serial.println();
 #endif      
-      //buffer_size--; // não queremos copiar o CRC para o buffer local pois calcularemos o CRC a partir dos dados recebidos
 
       // copia rx_buffer (global) para temp_buffer (local) sem o CRC
       j = rx_buffer_tail;
@@ -411,12 +388,18 @@ boolean received() {
       }
       Serial.println();
 #endif  
-      //buffer_size--;
       Serial.print(theDateIs()); Serial.print("received::buffer size sem CRC = "); Serial.println (buffer_size-1);
       crcCalculated = CRC8.smbus(temp_buffer, buffer_size-1); 
       Serial.print(theDateIs()); Serial.print("received::crcCalculated = "); Serial.println(crcCalculated,HEX);
       if (crcCalculated != crcReceived) {   // if we had a crc error
-         rx_buffer_tail = rx_buffer_head;    // discard the received msg (ASSUME QUE SÓ 1 MENSAGEM FOI RECEBIDA!)
+         if ((rx_buffer_tail + 5 <= 256) & (rx_buffer_tail + 5 <= rx_buffer_head)) {
+              rx_buffer_tail = rx_buffer_tail + 5;
+         } else if ((rx_buffer_tail + 5 > 256) & (rx_buffer_tail + 5 - 256 <= rx_buffer_head) ) {
+              rx_buffer_tail = rx_buffer_tail + 5 - 256;
+         } else {
+              rx_buffer_tail = rx_buffer_head; 
+         }
+
 #if DEBUG >= 1
          Serial.print(theDateIs()); Serial.println("received::CRC ERROR - mensagem apagada!");
 #endif
