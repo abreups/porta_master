@@ -398,14 +398,25 @@ boolean received() {
               rx_buffer_tail = rx_buffer_tail + 5 - 256;
          } else {
               rx_buffer_tail = rx_buffer_head; 
+#if DEBUG >= 2
+              Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
+              Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
+              Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+#endif              
          }
 
-#if DEBUG >= 1
+#if DEBUG >= 2
          Serial.print(theDateIs()); Serial.println("received::CRC ERROR - mensagem apagada!");
+         Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
+         Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
 #endif
          return (false);
       } else {
-          Serial.print(theDateIs()); Serial.println("Há dados válidos em rx_buffer[].");
+#if DEBUG >= 2
+         Serial.print(theDateIs()); Serial.println("received::Há dados válidos em rx_buffer[].");
+         Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
+         Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+#endif
           return(true);
       }
       
@@ -413,7 +424,6 @@ boolean received() {
       // não há nada em rx_buffer[]
       return(false);
   }
-  //return (rx_buffer_head != rx_buffer_tail); // TRUE=?
 }  // end of received()
 
 
@@ -602,34 +612,7 @@ void setup() {
   Serial.println(stringDate);
 #endif
 
-/*
-// depois apagar isso. Não estamos enviando o horário para o slave.
-  // stores ntp time in byte units (to send to slave via LoRa)
-  CP1 = (ntpTime & 0xff000000UL) >> 24;		// most significant byte
-  CP2 = (ntpTime & 0x00ff0000UL) >> 16;
-  CP3 = (ntpTime & 0x0000ff00UL) >>  8;
-  CP4 = (ntpTime & 0x000000ffUL)      ;		// least significant byte
 
-#if DEBUG >= 2
-  Serial.println("Variáveis do ntp:");
-  Serial.print("CP1 = 0x"); Serial.println(CP1, HEX);
-  Serial.print("CP2 = 0x"); Serial.println(CP2, HEX);
-  Serial.print("CP3 = 0x"); Serial.println(CP3, HEX);
-  Serial.print("CP4 = 0x"); Serial.println(CP4, HEX);
-#endif
-*/
-  /*
-      How to convert EpochTime to FormattedTime:
-      From https://github.com/arduino-libraries/NTPClient/blob/master/NTPClient.cpp
-   */
-/*  unsigned long hours = (ntpTime % 86400L) / 3600;
-  String hoursStr = hours < 10 ? "0" + String(hours) : String(hours);
-  unsigned long minutes = (ntpTime % 3600) / 60;
-  String minuteStr = minutes < 10 ? "0" + String(minutes) : String(minutes);
-  unsigned long seconds = ntpTime % 60;
-  String secondStr = seconds < 10 ? "0" + String(seconds) : String(seconds);
-  Serial.print("The time now is: "); Serial.println(hoursStr + ":" + minuteStr + ":" + secondStr);
-*/
   delay(3000);
 #if OLED > 0
   display.clear();
@@ -670,29 +653,7 @@ void setup() {
 #endif
   delay (2000);
 
-
-
-//  acho que não precisamos disso.
-/* ---------------------------------------------------------------------------------------
- *  teste de comando do master para o slave
- *  colocada em setup para testes, depois deverá ser adicionada a SSM
- ------------------------------------------------------------------------------------------ */
-/*  gpioSetup (25, 1);
-#if DEBUG >= 2
-  Serial.print(theDateIs());
-  Serial.println("gpioSetup::  Seting the LED on !!");
-#endif
-  delay (200);
-  gpioSetup (25, 0);
-#if DEBUG >= 2
-  Serial.print(theDateIs());
-  Serial.println("gpioSetup::  Seting the LED off !!");
-#endif
-*/
-
-
-
-  
+ 
   SSM_Status = 0; // initial status of the SSM
 
 } // end of setup()
@@ -784,6 +745,10 @@ void loop() {
         // descarta o byte do CRC.
         rx_buffer_tail++; 
         SSM_Status = 0; // coloca a Máquina de Estados em seu estado inicial
+#if DEBUG >= 2
+         Serial.print(theDateIs());Serial.print("loop::rx_buffer_head = ");Serial.println(rx_buffer_head);
+         Serial.print(theDateIs());Serial.print("loop::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+#endif
         break; // case 4
 
 
