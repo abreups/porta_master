@@ -26,10 +26,10 @@
 //#include <AWS_IOT.h>        // AWS IoT interface
 #include <FastCRC.h>        // lib for CRC calculations https://github.com/FrankBoesing/FastCRC
 #include <TimeLib.h>        // time functions used with ntp time https://github.com/PaulStoffregen/Time
-//AWS_IOT PPP_Master;
+
 FastCRC8 CRC8;
 
-#include <ArduinoJson.h>     // Json library to send data to AWS (use version 5. Do not use version 6) by Benoit Blanchon
+//#include <ArduinoJson.h>     // Json library to send data to AWS (use version 5. Do not use version 6) by Benoit Blanchon
 /*
                       JSON message we want to send:
                       prettified:
@@ -512,46 +512,6 @@ String theDateIs() {
     return dateNow;
 } // end theDateIs()
 
-
-/* ---------------------------------------------------------------------------------------
- *  teste de comando do master para o slave
- *  vamos implementar uma função que envia uma msg de comando para o slave
- *  quando receber a respectiva msg da nuvem
- *  1- verifica se chegou msg da nuvem
- *  2- se chegou e é um comando:
- *  3- monta e transmite a msg ao slave
- *  4- se recebeu ack em xx segundos OK
- *  5 - senão (recebeu Nak ou não recebeu nada) retransmite 3x
- *  6- se conseguiu transmitir OK segue processamento
- *  7- senão sinaliza erro (OLED, console e nuvem)
- *  Msgtype    = byte - 02H = COMMAND
- *  Command_ID = byte - 00H = GPIOSET
- *  gpio_pin   = byte - valores validos {22, 23, 17, 21, 12, 13, 25(buildin LED), 32..39}
- *  gpio_value = byte - 00 or 01
- *  colocada em setup para testes, depois deverá ser adicionada a SSM
- ------------------------------------------------------------------------------------------ */
-
-// ------------------------------ gpioSetup() --------------------------------
-// Pra que serve essa função mesmo?
-/* ---------------------------------------------------------------------------------------
- *  teste de comando do master para o slave
- *  colocada em setup para testes, depois deverá ser adicionada a SSM
- ------------------------------------------------------------------------------------------ */
- /*
-void gpioSetup (byte gpio_pin, byte gpio_value) {
-  tx_buffer[tx_buffer_head++] = HEADER;     // starts with a HEADER
-  tx_buffer[tx_buffer_head++] = 0x04;       // payload length
-  tx_buffer[tx_buffer_head++] = COMMAND;    // type of payload  02H = COMMAND to slave
-  tx_buffer[tx_buffer_head++] = GPIOSET;    // type of command  00H = GPIOSET
-  tx_buffer[tx_buffer_head++] = gpio_pin;   // valores validos {22, 23, 17, 21, 12, 13, 25(buildin LED), 32..39}
-  tx_buffer[tx_buffer_head++] = gpio_value; // 00 or 01
-  sendBuffer();                             // transmitts to slave
-#if DEBUG >= 1
-  Serial.print(theDateIs());
-  Serial.println("gpioSetup::  Seting the GPIO up no slave?");
-#endif
-} // end of gpioSetup
-*/
 
 // ------------------------------------------------------- setup  ----------------------------------------------------------------
 
