@@ -391,19 +391,43 @@ boolean received() {
       Serial.print(theDateIs()); Serial.print("received::buffer size sem CRC = "); Serial.println (buffer_size-1);
       crcCalculated = CRC8.smbus(temp_buffer, buffer_size-1); 
       Serial.print(theDateIs()); Serial.print("received::crcCalculated = "); Serial.println(crcCalculated,HEX);
-      if (crcCalculated != crcReceived) {   // if we had a crc error
-         if ((rx_buffer_tail + 5 <= 256) & (rx_buffer_tail + 5 <= rx_buffer_head)) {
-              rx_buffer_tail = rx_buffer_tail + 5;
-         } else if ((rx_buffer_tail + 5 > 256) & (rx_buffer_tail + 5 - 256 <= rx_buffer_head) ) {
-              rx_buffer_tail = rx_buffer_tail + 5 - 256;
-         } else {
-              rx_buffer_tail = rx_buffer_head; 
+      if (crcCalculated != crcReceived) {   // se tivemos erro de CRC
+          // o tamanho a mensagem é sempre 5 bytes.
+          if (rx_buffer_head > rx_buffer_tail) {
+              if ( rx_buffer_tail + 5 <= rx_buffer_head ) {
+                  rx_buffer_tail = rx_buffer_tail + 5;
+              } else { // rx_buffer_tail + 5 > rx_buffer_head
+                  rx_buffer_tail = rx_buffer_head; // zera rx_buffer
 #if DEBUG >= 2
+                  Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
+                  Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
+                  Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+#endif                  
+              }
+          } else if ( rx_buffer_head < rx_buffer_tail ) { // rx_buffer_head < rx_buffer_tail (o buffer circular "deu a volta")
+              if ( rx_buffer_tail + 5 <= 255 ) {
+                  rx_buffer_tail = rx_buffer_tail + 5;
+              } else { // rx_buffer_tail + 5 > 255
+                  if (rx_buffer_tail + 5 - 255 <= rx_buffer_head) {
+                      rx_buffer_tail = rx_buffer_tail + 5 - 255;
+                  } else {
+                      rx_buffer_tail = rx_buffer_head; // zera rx_buffer
+#if DEBUG >= 2
+                      Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
+                      Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
+                      Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+#endif
+                  }
+              }
+          } else {
+              rx_buffer_tail = rx_buffer_head; // zera rx_buffer
+#if DEBUG >= 2
+              Serial.print(theDateIs());Serial.println("received::Nunca deveria chegar aqui!");
               Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
               Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
               Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
-#endif              
-         }
+#endif
+          }
 
 #if DEBUG >= 2
          Serial.print(theDateIs()); Serial.println("received::CRC ERROR - mensagem apagada!");
@@ -513,6 +537,7 @@ String theDateIs() {
  *  teste de comando do master para o slave
  *  colocada em setup para testes, depois deverá ser adicionada a SSM
  ------------------------------------------------------------------------------------------ */
+ /*
 void gpioSetup (byte gpio_pin, byte gpio_value) {
   tx_buffer[tx_buffer_head++] = HEADER;     // starts with a HEADER
   tx_buffer[tx_buffer_head++] = 0x04;       // payload length
@@ -526,7 +551,7 @@ void gpioSetup (byte gpio_pin, byte gpio_value) {
   Serial.println("gpioSetup::  Seting the GPIO up no slave?");
 #endif
 } // end of gpioSetup
-
+*/
 
 // ------------------------------------------------------- setup  ----------------------------------------------------------------
 
