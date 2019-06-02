@@ -354,19 +354,58 @@ boolean received() {
   int  buffer_size = 0;
 
   if (rx_buffer_head != rx_buffer_tail) { // há algo no rx_buffer
-    crcReceived = rx_buffer[rx_buffer_head-1];
+      // sempre assumindo que a mensagem tem 5 bytes e o CRC é o último byte.
+      buffer_size = difference (rx_buffer_head, rx_buffer_tail);
+      if ( buffer_size < 5 ) { // é uma mensagem menor que o padrão, portanto, lixo.
+          rx_buffer_tail = rx_buffer_head; // zera rx_buffer
 #if DEBUG >= 2
-      Serial.print(theDateIs()); Serial.print("received::rx_buffer_head = "); Serial.println(rx_buffer_head);
-      Serial.print(theDateIs()); Serial.print("received::rx_buffer_tail = "); Serial.println(rx_buffer_tail);
-      Serial.print(theDateIs()); Serial.print("received::CRC recebido = "); Serial.println(crcReceived, HEX);
+          Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
+          Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
+          Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
 #endif
+          return(false);
+      } else { // é uma potencial mensagem válida
+
+          if (rx_buffer_head > rx_buffer_tail) {
+              if ( rx_buffer_tail + 4 <= 255 ) {
+                  crcReceived = rx_buffer[rx_buffer_tail + 4];
+              } else { // rx_buffer_tail + 4 > 255
+                  crcReceived = rx_buffer[rx_buffer_tail + 4 - 256];
+    #if DEBUG >= 2
+                  Serial.print(theDateIs());Serial.print("received::crcReceived = ");Serial.println(crcReceived, HEX);
+    #endif
+              }
+              
+          } else if ( rx_buffer_head < rx_buffer_tail ) { // o buffer circular "deu a volta".
+              if ( rx_buffer_tail + 4 <= 255 ) {
+                  crcReceived = rx_buffer[rx_buffer_tail + 4];
+    #if DEBUG >= 2
+                  Serial.print(theDateIs());Serial.print("received::crcReceived = ");Serial.println(crcReceived, HEX);
+    #endif
+              } else { // rx_buffer_tail + 4 > 255
+                  crcReceived = rx_buffer[rx_buffer_tail + 4 - 256];
+    #if DEBUG >= 2
+                  Serial.print(theDateIs());Serial.print("received::crcReceived = ");Serial.println(crcReceived, HEX);
+    #endif
+              }
+          } else {
+              rx_buffer_tail = rx_buffer_head; // zera rx_buffer
+    #if DEBUG >= 2
+              Serial.print(theDateIs());Serial.println("received::Nunca deveria chegar aqui!");
+              Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
+              Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
+              Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+    #endif
+          }
+
+      }
+
       j = rx_buffer_tail;
       buffer_size = difference (rx_buffer_head, rx_buffer_tail);
 #if DEBUG >= 2
       Serial.print(theDateIs()); Serial.print("received::buffer size = ");Serial.println (buffer_size);
       Serial.print(theDateIs()); Serial.print("received::rx_buffer[] = ");
       for (i = 0; i < (buffer_size); i++) {
-          //Serial.print("j = ");Serial.print(j); Serial.print("; i = ");Serial.println(i);
           Serial.print(rx_buffer[j],HEX);Serial.print("-");
           j++;
       }
@@ -404,12 +443,12 @@ boolean received() {
                   Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
 #endif                  
               }
-          } else if ( rx_buffer_head < rx_buffer_tail ) { // rx_buffer_head < rx_buffer_tail (o buffer circular "deu a volta")
+          } else if ( rx_buffer_head < rx_buffer_tail ) { // o buffer circular "deu a volta".
               if ( rx_buffer_tail + 5 <= 255 ) {
                   rx_buffer_tail = rx_buffer_tail + 5;
               } else { // rx_buffer_tail + 5 > 255
-                  if (rx_buffer_tail + 5 - 255 <= rx_buffer_head) {
-                      rx_buffer_tail = rx_buffer_tail + 5 - 255;
+                  if (rx_buffer_tail + 5 - 256 <= rx_buffer_head) {
+                      rx_buffer_tail = rx_buffer_tail + 5 - 256;
                   } else {
                       rx_buffer_tail = rx_buffer_head; // zera rx_buffer
 #if DEBUG >= 2
@@ -428,7 +467,6 @@ boolean received() {
               Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
 #endif
           }
-
 #if DEBUG >= 2
          Serial.print(theDateIs()); Serial.println("received::CRC ERROR - mensagem apagada!");
          Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
