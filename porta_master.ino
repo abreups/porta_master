@@ -42,21 +42,121 @@ FastCRC8 CRC8;
                       {"waterTempTimestamp": 5B3CD58B, "waterTempValue": 345}
 */
 
+//>>>>>>>>>>>>>>>>>>>
+//#include <iostream>
 
+//using namespace std;
 
-// sensor de temperatura AWS do Evaldo
-//char HOST_ADDRESS[]="aljq8kgezlxbs.iot.us-east-1.amazonaws.com";
-//char CLIENT_ID[]= "MeuSensorTempClient";
-//char TOPIC_NAME[]= "$aws/things/TemperatureSensor/shadow/update";
+// Buffer circular implementado pela classe Cqueue.
+// Crie uma instância com 'Cqueue <seuBuffer>;'
+// Métodos:
+//    Empty(): 
+//        retorna true se buffer está vazio.
+//        retorna false se buffer não está vazio.
+//
+//    Full():
+//        retorna true se buffer está cheio.
+//        retorna false se buffer não está cheio.
+//
+//    Add(int Element): coloca um byte ('Element') no fim do buffer.
+//        retorna true se operação teve sucesso.
+//        retorna false se houve problema (e byte não foi para a fila).
+//
+//    Delete(): retira o elemento que está na frente da fila.
+//        retorna true se operação foi bem sucedida.
+//        retorna false se houve problema (e elemento não foi retirado da fila).
+//
+//    getFront(): 
+//        retorna o byte que está na frente da fila.
+//        retorna -1 se o buffer estava vazio.
+//        
+//
+class Cqueue
+{
+	private:
+		int Rear, Front;
+		int Queue[50];
+		int Max;
+		int Size;
+	public:
+		Cqueue() {Size = 0; Max = 50; Rear = Front = -1;}
+		bool Empty();
+		bool Full();
+		bool Add(int Element);
+		bool Delete();
+		int getFront();
+};
 
+bool Cqueue::Empty()
+{
+	if(Size == 0)
+	//if((Front == Rear) & (Size == 0))
+		return true; // sim, está vazia.
+	else
+		return false; // não, não está vazia.
+}
 
-/*
-// sensor de temperatura AWS do Paulo
-char HOST_ADDRESS[]="amnuodn317xr5.iot.us-west-2.amazonaws.com";
-char CLIENT_ID[]= "SensorTemperaturaESP32";
-char TOPIC_NAME[]= "$aws/things/sensorTemperatura1/shadow/update";
-*/
+bool Cqueue::Full()
+{
+	if(Size == Max) {
+	//if((Rear == Front) & (Size == Max)) {
+		//cout << "Full::Rear = " << Rear << endl;
+		//cout << "Full::Front = " << Front << endl;
+		//cout << "Full::Size = " << Size << endl;
+		//cout << "Full::Max = " << Max << endl;
+		return true; // buffer está cheio.
+	} 
+	else {
+		//cout << "Full::Rear = " << Rear << endl;
+		//cout << "Full::Front = " << Front << endl;
+		//cout << "Full::Size = " << Size << endl;
+		//cout << "Full::Max = " << Max << endl;
+		return false; // buffer não está cheio.
+	}
+}
 
+bool Cqueue::Add(int Element)
+{
+	//cout << "Add::Rear = " << Rear << endl;
+	//cout << "Add::Element = " << Element << endl;
+	//cout << "Add::Size = " << Size << endl;
+	if(!Full()) {
+		Rear = (Rear + 1) % Max;
+		//cout << "Add::Rear = " << Rear << endl;
+		Queue[Rear] = Element;
+		//cout << "Add::Queue[Rear] = " << Queue[Rear] << endl;
+		Size++;
+		//cout << "Add::Size = " << Size << endl;
+		return true;
+	} else {
+		return false;
+	}
+}
+
+bool Cqueue::Delete()
+{
+	if(!Empty()) {
+		Front = (Front + 1) % Max;
+		Size--;
+		return true;
+	} else {
+		return false;
+	}
+}
+
+int Cqueue::getFront()
+{
+	int Temp;
+	if(!Empty()) {
+		//cout << "(getFront::Front = " << Front << ")";
+		Temp = (Front + 1) % Max;
+		//cout << "(getFront::Temp = " << Temp << ")";
+		return(Queue[Temp]);
+	} else {
+		return(-1);
+	}
+}
+//<<<<<<<<<<<<<<<<<<<<<
  
 // Protocol command definitions 
 #define HEADER     0xFF        // header da mensagem
@@ -575,6 +675,7 @@ void setup() {
   display.drawString(0, 0, "Conectando ao Wi-Fi");
   display.display();
 #endif
+
 #if DEBUG >= 1
     Serial.print("Conectando ao Wi-Fi ");
 #endif
@@ -639,7 +740,7 @@ void setup() {
   delay(3000);
 #if OLED > 0
   display.clear();
-  display.drawString(0, 0, "MASTER OK!");
+  display.drawString(0, 0, "Gateway OK!");
   display.display(); 
   delay(3000);
   display.clear();      // clears text in OLED display
@@ -675,6 +776,61 @@ void setup() {
   display.display();
 #endif
   delay (2000);
+
+  // Cria uma instância de buffer circular chamada 'Q'.
+  Cqueue Q;
+
+/*
+       // testes simples do buffer circular.
+       if ( !Q.Empty() ) {
+                Serial.print("Front = ");Serial.println(Q.getFront());
+        } else {
+                Serial.println("fila vazia");
+        };
+
+        if (Q.Add(10)) {
+                Serial.print("Front10 = ");Serial.println(Q.getFront());
+        } else {
+                Serial.println("erro em Q.Add");
+        };
+
+        Q.Delete();
+        if ( !Q.Empty() ) {
+                Serial.print("Front = ");Serial.println(Q.getFront());
+        } else {
+                Serial.println("fila vazia");
+        };
+
+        if (Q.Add(11)) {
+                Serial.print("Front11 = ");Serial.println(Q.getFront());
+        } else {
+                Serial.println("erro em Q.Add");
+        };
+
+        if (Q.Add(12)) {
+                Serial.print("Front12 = ");Serial.println(Q.getFront());
+        } else {
+                Serial.println("erro em Q.Add");
+        };
+        Q.Delete();
+        if ( !Q.Empty() ) {
+                Serial.print("Front = ");Serial.println(Q.getFront());
+        } else {
+                Serial.println("fila vazia");
+        };
+
+        Q.Delete();
+        if ( !Q.Empty() ) {
+                Serial.print("Front = ");Serial.println(Q.getFront());
+        } else {
+                Serial.println("fila vazia");
+        };
+*/
+
+
+
+
+
 
  
   SSM_Status = 0; // initial status of the SSM
