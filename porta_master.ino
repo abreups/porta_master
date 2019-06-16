@@ -29,24 +29,6 @@
 
 FastCRC8 CRC8;
 
-//#include <ArduinoJson.h>     // Json library to send data to AWS (use version 5. Do not use version 6) by Benoit Blanchon
-/*
-                      JSON message we want to send:
-                      prettified:
-                      {
-                        "waterTempTimestamp": CP1CP2CP3CP4,  ---> 4 bytes representing time
-                        "waterTempValue": b1b2               ---> 2 bytes (value is in temp1)
-                      }
-
-                      minified:
-                      {"waterTempTimestamp": 5B3CD58B, "waterTempValue": 345}
-*/
-
-//>>>>>>>>>>>>>>>>>>>
-//#include <iostream>
-
-//using namespace std;
-
 // Buffer circular implementado pela classe Cqueue.
 // Crie uma instância com 'Cqueue <seuBuffer>;'
 // Métodos:
@@ -69,95 +51,109 @@ FastCRC8 CRC8;
 //    getFront(): 
 //        retorna o byte que está na frente da fila.
 //        retorna -1 se o buffer estava vazio.
-//        
+//    Size():
+//        retorna a quantidade de bytes na fila (o tamanho do buffer ocupado por dados). 
+//
+//    Clean():
+//        zera o conteúdo do buffer.
 //
 class Cqueue
 {
 	private:
-		int Rear, Front;
-		int Queue[50];
-		int Max;
-		int Size;
+		int Rear_, Front_;
+		int Queue_[256];
+		int Max_;
+		int Size_;
 	public:
-		Cqueue() {Size = 0; Max = 50; Rear = Front = -1;}
-		bool Empty();
-		bool Full();
+		Cqueue() {Size_ = 0; Max_ = 256; Rear_ = Front_ = -1;}
+		bool Empty() const;
+		bool Full() const;
 		bool Add(int Element);
 		bool Delete();
 		int getFront();
+    int Size() const;
+    void Clean();
 };
 
-bool Cqueue::Empty()
+bool Cqueue::Empty() const
 {
-	if(Size == 0)
-	//if((Front == Rear) & (Size == 0))
+	if(Size_ == 0)
 		return true; // sim, está vazia.
 	else
 		return false; // não, não está vazia.
 }
 
-bool Cqueue::Full()
+bool Cqueue::Full() const
 {
-	if(Size == Max) {
-	//if((Rear == Front) & (Size == Max)) {
-		//cout << "Full::Rear = " << Rear << endl;
-		//cout << "Full::Front = " << Front << endl;
-		//cout << "Full::Size = " << Size << endl;
-		//cout << "Full::Max = " << Max << endl;
+	if(Size_ == Max_)
 		return true; // buffer está cheio.
-	} 
-	else {
-		//cout << "Full::Rear = " << Rear << endl;
-		//cout << "Full::Front = " << Front << endl;
-		//cout << "Full::Size = " << Size << endl;
-		//cout << "Full::Max = " << Max << endl;
+	else
 		return false; // buffer não está cheio.
-	}
 }
 
 bool Cqueue::Add(int Element)
 {
-	//cout << "Add::Rear = " << Rear << endl;
-	//cout << "Add::Element = " << Element << endl;
-	//cout << "Add::Size = " << Size << endl;
 	if(!Full()) {
-		Rear = (Rear + 1) % Max;
-		//cout << "Add::Rear = " << Rear << endl;
-		Queue[Rear] = Element;
-		//cout << "Add::Queue[Rear] = " << Queue[Rear] << endl;
-		Size++;
-		//cout << "Add::Size = " << Size << endl;
+		Rear_ = (Rear_ + 1) % Max_;
+		Queue_[Rear_] = Element;
+		Size_++;
 		return true;
-	} else {
+	} else
 		return false;
-	}
 }
 
 bool Cqueue::Delete()
 {
 	if(!Empty()) {
-		Front = (Front + 1) % Max;
-		Size--;
+		Front_ = (Front_ + 1) % Max_;
+		Size_--;
 		return true;
-	} else {
+	} else
 		return false;
-	}
 }
 
 int Cqueue::getFront()
 {
 	int Temp;
 	if(!Empty()) {
-		//cout << "(getFront::Front = " << Front << ")";
-		Temp = (Front + 1) % Max;
-		//cout << "(getFront::Temp = " << Temp << ")";
-		return(Queue[Temp]);
-	} else {
+		Temp = (Front_ + 1) % Max_;
+		return(Queue_[Temp]);
+	} else
 		return(-1);
-	}
 }
-//<<<<<<<<<<<<<<<<<<<<<
- 
+
+int Cqueue::Size() const
+{
+    return Size_;
+}
+
+void Cqueue::Clean()
+{
+    Rear_ = Front_;
+    Size_ = 0;
+}
+
+// Cria uma instância de buffer circular chamada 'Q'.
+// Q é o nosso "receive buffer" do rádio LoRa.
+Cqueue Q;
+
+Cqueue T; // fila temporária.
+
+// imprimeFila(): função que coloca na serial o conteúdo de uma fila (um buffer Cqueue).
+//
+void imprimeFila(Cqueue Fila)
+{
+        Cqueue T;
+        T = Fila;
+        while (!T.Empty()) {
+                Serial.print(T.getFront());Serial.print("-");
+                T.Delete();
+        }
+        Serial.println();
+}
+
+
+
 // Protocol command definitions 
 #define HEADER     0xFF        // header da mensagem
 #define ENQ        0x05        // ASCII ENQ - enquire command
@@ -175,33 +171,18 @@ int Cqueue::getFront()
 //      ALARMID     = qual é o tipo de alarme que o Slave está informando.
 //      ALARMVALUE  = qual é o valor do alarme informado.
 
-// definições compatíveis com o sensor_porta
+//      RESP: definições compatíveis com o sensor_porta
 #define RESP              0x03   // Msgtype = byte 03H - RESP - response
 
-// SLAVEID vai ser transmitido por sensor_porta
+//      SLAVEID vai ser transmitido por sensor_porta.
+//      Não é definido no código do gateway (Master).
 
-// definições de ALARMID compatíveis com sensor_porta
+//      ALARMID: definições compatíveis com sensor_porta
 #define   ALARMEPORTA       0x01
 
-// definições de ALARMVALUE compatíveis com sensor_porta
+//      ALARMVALUE: definições compatíveis com sensor_porta
 #define   PORTAABERTA       0x01
 #define   PORTAFECHADA      0x02
-
-// depois apagar tudo isso aqui.
-#define   motor_on          0x01 // motor_on              OK|NG    byte   (OK=01, NG=00)
-#define   motor_off         0x02 //- motor_off             OK|NG   
-#define   water_level       0x03 //- water_level        OK|NG   
-#define   WATER_TEMPERATURE 0x04 //- WATER_TEMPERATURE  XX     byte   (XX temp oC)
-#define   current_ac_motor  0x05 //- current-ac_motor   YY.Y      byte   (XX Amps) 
-#define   master_reset      0x06 //- master-reset           OK|NG    
-#define   load_motor_table  0x07 //- load_motor_table   OK|NG   
-#define   show_status       0x08 //- show_status           OK|NG  - transferir arquivo texto “status.txt”
-// Alarm IDs
-#define NOWATER   0x01    //
-#define NOCLOCK   0x20    // slave clock is out of synch
-
-
-
 
 #define NTPTIME		        0x09 // payload has 4 bytes with ntp time
 
@@ -256,7 +237,7 @@ byte    p_rx_msg =                      0;              // array index of RX_msg
 byte    RX_msg [256];                                   // holds received bytes in foreground functions
 
 // test - FF - 10 bytes - ABCDEFGHIJ
-byte    tx_test[] =                    {0xFF, 10, 65, 66, 67, 68, 69, 70, 71, 72, 73,74}; 
+//byte    tx_test[] =                    {0xFF, 10, 65, 66, 67, 68, 69, 70, 71, 72, 73,74}; 
 
 /*
  *    tx_buffer is the buffer used to store data that will be sent through the LoRa radio.
@@ -329,39 +310,22 @@ unsigned char CP3 = 0;
 unsigned char CP4 = 0;		// least significant byte
 
 
-// Para que server esta função?
-void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
-{
-    strncpy(rcvdPayload,payLoad,payloadLen);
-    rcvdPayload[payloadLen] = 0;
-    msgReceived = 1;
-}
-
 //-------------------------------------------------------------------
-// callback function setup to process  data received by the LoRa radio
+// callback function para pegar os bytes recebidos pelo rádio LoRa.
 // TO-DO: fazer função retornar TRUE ou FALSE ou algo assim
 //
 void onReceive(int packetSize) {
-  if (packetSize == 0) return;                          // if there's no packet, return
-#if DEBUG >= 2
-  Serial.println("Pointers na entrada da função onReceive():");
-  Serial.println("onReceive::  rx_buffer_head = " + String(rx_buffer_head) );
-  Serial.println("onReceive::  rx_buffer_tail = " + String(rx_buffer_tail) );
-#endif  
+  int rx_byte;
+  if (packetSize == 0) return;     // se não há pacotes, retorna
   do {
-    rx_byte = LoRa.read();                              // receives one byte
-    rx_buffer[rx_buffer_head] = rx_byte;                // salves received byte in the rx_buffer
-    rx_buffer_head++;                                   // points to the next position in the rx_buffer
-  } while (LoRa.available());                           // until all bytes are received
-#if DEBUG >= 2
-  Serial.println("Pointers na saída da função onReceive():");
-  Serial.println("onReceive::  rx_buffer_head = " + String(rx_buffer_head) );
-  Serial.println("onReceive::  rx_buffer_tail = " + String(rx_buffer_tail) );
-#endif
+    rx_byte = LoRa.read();         // recebe 1 byte do rádio LoRa
+    Q.Add(rx_byte);                // salva byte no buffer Q
+  } while (LoRa.available());      // até que todos os bytes tenham sido recebidos
 }
 
+
 //--------------------------------------------------------------------
-// send just 1 byte - used to send commands and responses (ENQ, ACK)
+// Envia 1 byte pelo rádio LoRa.
 void sendByte (byte tx_byte) {   
   LoRa.beginPacket();                                   // start packet
   LoRa.write(tx_byte);                                  // add byte to be transmitted
@@ -369,221 +333,65 @@ void sendByte (byte tx_byte) {
   LoRa.receive();                                       // you must make Lora listen to reception again !!
 }
 
-//----------------------------------------------------------------
-// Function used to calculate the length of the message
-// stored at the rx_buffer or tx_buffer
-byte difference (byte b, byte a) {
-  if ((b-a)<0) {
-    return (b-a+256);
-  }else{
-    return (b-a);
-  }
-}
-
-//-----------------------------------------------------------------
-// sendBuffer(): send a buffer of bytes
-//
-void sendBuffer() {
-  byte temp_buffer [256];
-  byte i = 0 , j = 0, crcCalculated =0;
-  byte buffer_size = 0;
-  
-  // add crc at the end of the txbuffer
-  j = tx_buffer_tail;
-  buffer_size = difference (tx_buffer_head, tx_buffer_tail);
-  for (i = 0; i< buffer_size; i++) {
-    temp_buffer[i] = tx_buffer [j];
-    j++;
-  }
-  crcCalculated = CRC8.smbus(temp_buffer, buffer_size); 
-  
-#if DEBUG >= 2
-  Serial.print(theDateIs()); Serial.println("sendBuffer::  tamanho do nuffer = "+ String(difference (tx_buffer_head, tx_buffer_tail),HEX));
-#endif
-  tx_buffer[tx_buffer_head++] = crcCalculated;             // add the crc at the end of the msg to be transmitted
-#if DEBUG >= 2
-  Serial.print(theDateIs()); Serial.println("sendBuffer::  CRC = "+ String(crcCalculated,HEX));
-#endif
-#if DEBUG >= 1
-  Serial.print(theDateIs()); Serial.println("sendBuffer:: Sending LoRa message");
-#endif
-  LoRa.beginPacket();                                  // start packet
-  do {
-     tx_byte = tx_buffer[tx_buffer_tail++];              // get the byte from the buffer
-#if DEBUG >= 2
-     Serial.print(theDateIs()); Serial.println("sendBuffer:: TxByte= " + String(tx_byte,HEX)+" txhead= " + String(tx_buffer_head)+" txtail= " + String(tx_buffer_tail));
-#endif
-     LoRa.write(tx_byte);                              // add byte to be transmitted
-  } while (tx_buffer_tail != tx_buffer_head);         // while these 2 pointers are different, there are bytes to be trasnmitted
-  LoRa.endPacket();                                   // finish packet and send it
-  LoRa.receive();                                     // you must make Lora listen to reception again !!
-  TxmsgCount++;                                       // increment Tx message counter
-#if DEBUG >= 1
-  Serial.print(theDateIs()); Serial.println("sendBuffer:: LoRa message sent");
-#endif
-
-#if OLED > 0
-    // displays in the OLED TX and RX msgs counters
-    display.clear();
-    display.drawString(0, 0, "Master Tx to Slave");
-    display.drawString(40, 13, String(TxmsgCount));
-    display.drawString(0, 26, "Master Rx from Slave");
-    display.drawString(40, 39, String(RxmsgCount));
-    display.display(); 
-#endif
-}
-
 
 // ------------------------------ received() --------------------------------
-// check if there are bytes in the Rx buffer
-// returns:
+// Verifica se há dados no buffer Q e toma ações.
+// Retorna:
 //    FALSE se nada foi recebido em rx_buffer[]
-//    TRUE  se algo foi recebido em rx_buffer[] e o CRC está correto (ou seja, a mensagem é válida).
+//    TRUE  se algo foi recebido em Q e o CRC está correto (ou seja, a mensagem é válida).
 //
-// A mensagem recebida (se for somente uma mensagem...) começa 
-// na posição apontada por rx_buffer_tail e termina na posição rx_buffer_head-1
-// (rx_buffer_head aponta para a próxima posição livre no buffer).
-// O CRC está na última posição da mensagem, portanto está na
-// posição rx_buffer_head-1.
+// Modifica a fila Q se o CRC da mensagem estiver incorreto, eliminando os 5 bytes em questão.
 //
-boolean received() {
+bool received() {
 
-  byte crcReceived, crcCalculated=0;
-  byte temp_buffer [256];
-  byte i = 0 , j = 0;
-  int  buffer_size = 0;
-
-  if (rx_buffer_head != rx_buffer_tail) { // há algo no rx_buffer
+  byte crcReceived = 0;
+  byte crcCalculated = 0;
+  byte crc_buffer[4];    // buffer temporário para calcular CRC.
+  Cqueue Qtemp;          // buffer temporário; réplica de nosso buffer Q (mensagens recebidas)
+  
+  if (!Q.Empty()) { // há algo na fila Q.
+      Qtemp = Q;
+      
       // sempre assumindo que a mensagem tem 5 bytes e o CRC é o último byte.
-      buffer_size = difference (rx_buffer_head, rx_buffer_tail);
-      if ( buffer_size < 5 ) { // é uma mensagem menor que o padrão, portanto, lixo.
-          rx_buffer_tail = rx_buffer_head; // zera rx_buffer
+      //Serial.print(theDateIs());Serial.print("received::Q Size = ");Serial.println( Q.Size() );
+      if ( Q.Size() < 5 ) { // é uma mensagem menor que o padrão, portanto, lixo.
 #if DEBUG >= 2
-          Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
-          Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
-          Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
-#endif
+          Serial.print(theDateIs());Serial.println("received::há menos de 5 bytes em Q; descartando...");
+#endif        
+          Q.Clean(); // zera o buffer Q.
           return(false);
       } else { // é uma potencial mensagem válida
-
-          if (rx_buffer_head > rx_buffer_tail) {
-              if ( rx_buffer_tail + 4 <= 255 ) {
-                  crcReceived = rx_buffer[rx_buffer_tail + 4];
-              } else { // rx_buffer_tail + 4 > 255
-                  crcReceived = rx_buffer[rx_buffer_tail + 4 - 256];
-    #if DEBUG >= 2
-                  Serial.print(theDateIs());Serial.print("received::crcReceived = ");Serial.println(crcReceived, HEX);
-    #endif
-              }
-              
-          } else if ( rx_buffer_head < rx_buffer_tail ) { // o buffer circular "deu a volta".
-              if ( rx_buffer_tail + 4 <= 255 ) {
-                  crcReceived = rx_buffer[rx_buffer_tail + 4];
-    #if DEBUG >= 2
-                  Serial.print(theDateIs());Serial.print("received::crcReceived = ");Serial.println(crcReceived, HEX);
-    #endif
-              } else { // rx_buffer_tail + 4 > 255
-                  crcReceived = rx_buffer[rx_buffer_tail + 4 - 256];
-    #if DEBUG >= 2
-                  Serial.print(theDateIs());Serial.print("received::crcReceived = ");Serial.println(crcReceived, HEX);
-    #endif
-              }
-          } else {
-              rx_buffer_tail = rx_buffer_head; // zera rx_buffer
-    #if DEBUG >= 2
-              Serial.print(theDateIs());Serial.println("received::Nunca deveria chegar aqui!");
-              Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
-              Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
-              Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
-    #endif
-          }
-
-      }
-
-      j = rx_buffer_tail;
-      buffer_size = difference (rx_buffer_head, rx_buffer_tail);
+          // pega todos os bytes da mensagem.
+          crc_buffer[0] = Qtemp.getFront(); Qtemp.Delete(); // RESP
+          crc_buffer[1] = Qtemp.getFront(); Qtemp.Delete(); // SLAVEID
+          crc_buffer[2] = Qtemp.getFront(); Qtemp.Delete(); // ALARMID
+          crc_buffer[3] = Qtemp.getFront(); Qtemp.Delete(); // ALARMVALUE
+          crcReceived   = Qtemp.getFront(); Qtemp.Delete(); // CRC
 #if DEBUG >= 2
-      Serial.print(theDateIs()); Serial.print("received::buffer size = ");Serial.println (buffer_size);
-      Serial.print(theDateIs()); Serial.print("received::rx_buffer[] = ");
-      for (i = 0; i < (buffer_size); i++) {
-          Serial.print(rx_buffer[j],HEX);Serial.print("-");
-          j++;
+          Serial.print(theDateIs());Serial.print("received::crcReceived = ");Serial.println( crcReceived, HEX );
+#endif
       }
-      Serial.println();
-#endif      
-
-      // copia rx_buffer (global) para temp_buffer (local) sem o CRC
-      j = rx_buffer_tail;
-      for (i = 0; i < (buffer_size-1); i++) {
-          temp_buffer[i] = rx_buffer [j];
-          j++;
-      }
-
+      crcCalculated = CRC8.smbus(crc_buffer, 4); 
 #if DEBUG >= 2
-      // Mostra temp_buffer[] para conferência.
-      Serial.print(theDateIs()); Serial.print("received::temp_buffer[] (sem CRC) = ");
-      for (i = 0; i < buffer_size-1; i++) {
-        Serial.print(temp_buffer[i],HEX);Serial.print("+");
-      }
-      Serial.println();
-#endif  
-      Serial.print(theDateIs()); Serial.print("received::buffer size sem CRC = "); Serial.println (buffer_size-1);
-      crcCalculated = CRC8.smbus(temp_buffer, buffer_size-1); 
       Serial.print(theDateIs()); Serial.print("received::crcCalculated = "); Serial.println(crcCalculated,HEX);
+#endif      
       if (crcCalculated != crcReceived) {   // se tivemos erro de CRC
-          // o tamanho a mensagem é sempre 5 bytes.
-          if (rx_buffer_head > rx_buffer_tail) {
-              if ( rx_buffer_tail + 5 <= rx_buffer_head ) {
-                  rx_buffer_tail = rx_buffer_tail + 5;
-              } else { // rx_buffer_tail + 5 > rx_buffer_head
-                  rx_buffer_tail = rx_buffer_head; // zera rx_buffer
+          // o tamanho da mensagem é sempre 5 bytes, então elimine 5 bytes da fila.
+          Q.Delete(); Q.Delete(); Q.Delete(); Q.Delete(); Q.Delete();
 #if DEBUG >= 2
-                  Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
-                  Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
-                  Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
-#endif                  
-              }
-          } else if ( rx_buffer_head < rx_buffer_tail ) { // o buffer circular "deu a volta".
-              if ( rx_buffer_tail + 5 <= 255 ) {
-                  rx_buffer_tail = rx_buffer_tail + 5;
-              } else { // rx_buffer_tail + 5 > 255
-                  if (rx_buffer_tail + 5 - 256 <= rx_buffer_head) {
-                      rx_buffer_tail = rx_buffer_tail + 5 - 256;
-                  } else {
-                      rx_buffer_tail = rx_buffer_head; // zera rx_buffer
-#if DEBUG >= 2
-                      Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
-                      Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
-                      Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+      Serial.print(theDateIs()); Serial.println("received::5 bytes descartados da fila Q");
+      Serial.print(theDateIs()); Serial.print("received::tamanho restante do buffer Q = ");Serial.println(Q.Size());
+      Serial.print(theDateIs());Serial.print("received::Q = ");imprimeFila(Q);
 #endif
-                  }
-              }
-          } else {
-              rx_buffer_tail = rx_buffer_head; // zera rx_buffer
-#if DEBUG >= 2
-              Serial.print(theDateIs());Serial.println("received::Nunca deveria chegar aqui!");
-              Serial.print(theDateIs());Serial.println("received::Zerando rx_buffer.");
-              Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
-              Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
-#endif
-          }
-#if DEBUG >= 2
-         Serial.print(theDateIs()); Serial.println("received::CRC ERROR - mensagem apagada!");
-         Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
-         Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
-#endif
-         return (false);
+          return (false);
       } else {
 #if DEBUG >= 2
-         Serial.print(theDateIs()); Serial.println("received::Há dados válidos em rx_buffer[].");
-         Serial.print(theDateIs());Serial.print("received::rx_buffer_head = ");Serial.println(rx_buffer_head);
-         Serial.print(theDateIs());Serial.print("received::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+         Serial.print(theDateIs()); Serial.println("received::Há dados válidos no buffer Q.");
 #endif
           return(true);
       }
-      
   } else {
-      // não há nada em rx_buffer[]
+      // não há nada em Q
       return(false);
   }
 }  // end of received()
@@ -777,62 +585,6 @@ void setup() {
 #endif
   delay (2000);
 
-  // Cria uma instância de buffer circular chamada 'Q'.
-  Cqueue Q;
-
-/*
-       // testes simples do buffer circular.
-       if ( !Q.Empty() ) {
-                Serial.print("Front = ");Serial.println(Q.getFront());
-        } else {
-                Serial.println("fila vazia");
-        };
-
-        if (Q.Add(10)) {
-                Serial.print("Front10 = ");Serial.println(Q.getFront());
-        } else {
-                Serial.println("erro em Q.Add");
-        };
-
-        Q.Delete();
-        if ( !Q.Empty() ) {
-                Serial.print("Front = ");Serial.println(Q.getFront());
-        } else {
-                Serial.println("fila vazia");
-        };
-
-        if (Q.Add(11)) {
-                Serial.print("Front11 = ");Serial.println(Q.getFront());
-        } else {
-                Serial.println("erro em Q.Add");
-        };
-
-        if (Q.Add(12)) {
-                Serial.print("Front12 = ");Serial.println(Q.getFront());
-        } else {
-                Serial.println("erro em Q.Add");
-        };
-        Q.Delete();
-        if ( !Q.Empty() ) {
-                Serial.print("Front = ");Serial.println(Q.getFront());
-        } else {
-                Serial.println("fila vazia");
-        };
-
-        Q.Delete();
-        if ( !Q.Empty() ) {
-                Serial.print("Front = ");Serial.println(Q.getFront());
-        } else {
-                Serial.println("fila vazia");
-        };
-*/
-
-
-
-
-
-
- 
   SSM_Status = 0; // initial status of the SSM
 
 } // end of setup()
@@ -851,21 +603,31 @@ void loop() {
       // primeiro byte da mensagem.
   
       		if (received()) { // se há dados válidos em rx_buffer[]
-        			switch (rx_buffer[rx_buffer_tail]) {   
+#if DEBUG >= 2
+              Serial.print(theDateIs());Serial.print("loop::Q = ");imprimeFila(Q);
+#endif            
+        			switch ( Q.getFront() ) {
               
   				        case RESP:
                       // Temos uma mensagem (RESPosta) vinda de um Slave.
                       // Os próximos 4 bytes são SLAVEID, ALARMID, ALARMVALUE e CRC.
 #if DEBUG >= 2
                       Serial.print(theDateIs());Serial.println("loop::RESP recebido de um Slave.");
-                      //Serial.print(theDateIs());Serial.print("loop::SLAVEID = ");Serial.println(rx_buffer[rx_buffer_tail+1]);
-                      //Serial.print(theDateIs());Serial.print("loop::ALARMID = ");Serial.println(rx_buffer[rx_buffer_tail+2]);
-                      //Serial.print(theDateIs());Serial.print("loop::ALARMVALUE = ");Serial.println(rx_buffer[rx_buffer_tail+3]);
 #endif                    
                       // prepara para processar o próximo byte da mensagem
-                      rx_buffer_tail++; 
+                      Q.Delete(); 
                       SSM_Status = 1;
                       break; // case RESP
+
+                  default:
+                      // Não identificamos o tipo de mensagem, portanto, 
+                      // descartamos a mensagem.
+                      // o tamanho da mensagem é sempre 5 bytes, então elimine 5 bytes da fila.
+                      Q.Delete(); Q.Delete(); Q.Delete(); Q.Delete(); Q.Delete();
+#if DEBUG >= 2                      
+                      Serial.print(theDateIs());Serial.println("loop::Mensagem não identificada. Descartados 5 bytes.");
+#endif                      
+                      break;
 					
       			  } // end of switch
     		  } // end of 'if( received() )'
@@ -876,13 +638,13 @@ void loop() {
     // Estado anterior deveria ter sido o 0.
     // Estado 1 processa o ID do Slave.
 #if DEBUG >= 1
-        Serial.print(theDateIs());Serial.print("loop::SLAVEID = ");Serial.println(rx_buffer[rx_buffer_tail]);
+        Serial.print(theDateIs());Serial.print("loop::SLAVEID = ");Serial.println( Q.getFront() );
 #endif
 
         // Aqui podemos colocar tratamentos diferentes dependendo de qual Slave veio a mensagem.
         
         // prepara para processar o próximo byte da mensagem
-        rx_buffer_tail++; 
+        Q.Delete(); 
         SSM_Status = 2;
         break; // case 1
 
@@ -890,14 +652,16 @@ void loop() {
     case 2:
     // Estado anterior deveria ter sido o 1.
     // Estado 2 processa o ALARMID.
-#if DEBUG >= 1
-        Serial.print(theDateIs());Serial.print("loop::ALARMID = ");Serial.println(rx_buffer[rx_buffer_tail]);
-#endif
+        if ( Q.getFront() == ALARMEPORTA ) {
+            Serial.print(theDateIs());Serial.println("loop::ALARMID = ALARMEPORTA");  
+        } else {
+            Serial.print(theDateIs());Serial.println("loop::ALARMID = desconhecido");  
+        }
 
         // Aqui podemos colocar tratamentos diferentes dependendo do ALARMID.
         
         // prepara para processar o próximo byte da mensagem
-        rx_buffer_tail++; 
+        Q.Delete();
         SSM_Status = 3;
         break; // case 2
 
@@ -905,14 +669,18 @@ void loop() {
     case 3:
     // Estado anterior deveria ter sido o 2.
     // Estado 3 processa o ALARMVALUE.
-#if DEBUG >= 1
-        Serial.print(theDateIs());Serial.print("loop::ALARMVALUE = ");Serial.println(rx_buffer[rx_buffer_tail]);
-#endif
-
+        if ( Q.getFront() == PORTAABERTA ) {
+            Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = PORTAABERTA");  
+        } else if ( Q.getFront() == PORTAFECHADA ) {
+            Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = PORTAFECHADA");  
+        } else {
+            Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = desconhecido");  
+        }
+        
         // Aqui podemos colocar tratamentos diferentes dependendo do ALARMVALUE.
         
         // prepara para processar o próximo byte da mensagem
-        rx_buffer_tail++; 
+        Q.Delete();
         SSM_Status = 4;
         break; // case 3
 
@@ -922,11 +690,10 @@ void loop() {
     // Estado 4 só descarta o CRC.
 
         // descarta o byte do CRC.
-        rx_buffer_tail++; 
+        Q.Delete(); 
         SSM_Status = 0; // coloca a Máquina de Estados em seu estado inicial
 #if DEBUG >= 2
-         Serial.print(theDateIs());Serial.print("loop::rx_buffer_head = ");Serial.println(rx_buffer_head);
-         Serial.print(theDateIs());Serial.print("loop::rx_buffer_tail = ");Serial.println(rx_buffer_tail);
+         Serial.print(theDateIs());Serial.print("loop::Q Size = ");Serial.println( Q.Size() );
 #endif
         break; // case 4
 
@@ -938,7 +705,7 @@ void loop() {
         Serial.print(theDateIs());Serial.print("loop::Estado indefinido = ");Serial.println (SSM_Status);
         Serial.println("Colocando Máquina de Estados no estado inicial.");
 #endif
-        rx_buffer_tail = rx_buffer_head;
+        Q.Clean();
         SSM_Status = 0;
         break;
   } // end of switch(SSM_Status)
