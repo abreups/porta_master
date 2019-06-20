@@ -652,17 +652,24 @@ void loop() {
     case 2:
     // Estado anterior deveria ter sido o 1.
     // Estado 2 processa o ALARMID.
-        if ( Q.getFront() == ALARMEPORTA ) {
-            Serial.print(theDateIs());Serial.println("loop::ALARMID = ALARMEPORTA");  
-        } else {
-            Serial.print(theDateIs());Serial.println("loop::ALARMID = desconhecido");  
-        }
-
-        // Aqui podemos colocar tratamentos diferentes dependendo do ALARMID.
+        switch ( Q.getFront() ) {
         
-        // prepara para processar o próximo byte da mensagem
-        Q.Delete();
-        SSM_Status = 3;
+            // Aqui podemos colocar tratamentos diferentes dependendo do ALARMID.
+        
+            case ALARMEPORTA:
+                Serial.print(theDateIs());Serial.println("loop::ALARMID = ALARMEPORTA");  
+                Q.Delete();
+                SSM_Status = 3;
+                break;
+
+            default:
+                Serial.print(theDateIs());Serial.println("loop::ALARMID = desconhecido");
+                Serial.print(theDateIs());Serial.println("loop::Descartando mensagem");
+                Q.Delete();Q.Delete();Q.Delete(); // descartando os 3 bytes restantes.
+                SSM_Status = 0;
+                break;
+              
+        }
         break; // case 2
 
 
