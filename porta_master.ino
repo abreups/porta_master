@@ -636,7 +636,7 @@ void loop() {
 
     case 1:
     // Estado anterior deveria ter sido o 0.
-    // Estado 1 processa o ID do Slave.
+    // Estado 1 processa o ID do Slave (o segundo byte da mensagem).
 #if DEBUG >= 1
         Serial.print(theDateIs());Serial.print("loop::SLAVEID = ");Serial.println( Q.getFront() );
 #endif
@@ -651,50 +651,69 @@ void loop() {
 
     case 2:
     // Estado anterior deveria ter sido o 1.
-    // Estado 2 processa o ALARMID.
+    // Estado 2 processa o ALARMID (o terceiro byte da mensagem).
         switch ( Q.getFront() ) {
         
             // Aqui podemos colocar tratamentos diferentes dependendo do ALARMID.
         
             case ALARMEPORTA:
+#if DEBUG >= 1            
                 Serial.print(theDateIs());Serial.println("loop::ALARMID = ALARMEPORTA");  
+#endif                
                 Q.Delete();
                 SSM_Status = 3;
                 break;
 
             default:
+#if DEBUG >= 1
                 Serial.print(theDateIs());Serial.println("loop::ALARMID = desconhecido");
                 Serial.print(theDateIs());Serial.println("loop::Descartando mensagem");
+#endif                
                 Q.Delete();Q.Delete();Q.Delete(); // descartando os 3 bytes restantes.
                 SSM_Status = 0;
                 break;
-              
         }
         break; // case 2
 
 
     case 3:
     // Estado anterior deveria ter sido o 2.
-    // Estado 3 processa o ALARMVALUE.
-        if ( Q.getFront() == PORTAABERTA ) {
-            Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = PORTAABERTA");  
-        } else if ( Q.getFront() == PORTAFECHADA ) {
-            Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = PORTAFECHADA");  
-        } else {
-            Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = desconhecido");  
+    // Estado 3 processa o ALARMVALUE (o quarto byte da mensagem).
+        switch ( Q.getFront() ) {
+
+            // Aqui podemos colocar tratamentos diferentes dependendo do ALARMVALUE.
+
+            case PORTAABERTA:
+#if DEBUG >= 1
+                Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = PORTAABERTA");  
+#endif
+                Q.Delete();
+                SSM_Status = 4;
+                break;
+
+            case PORTAFECHADA:
+#if DEBUG >= 1
+                Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = PORTAFECHADA");
+#endif
+                Q.Delete();
+                SSM_Status = 4;
+                break;
+
+            default:
+#if DEBUG >= 1            
+                Serial.print(theDateIs());Serial.println("loop::ALARMVALUE = desconhecido");
+                Serial.print(theDateIs());Serial.println("loop::Descartando mensagem");
+#endif                
+                Q.Delete();Q.Delete(); // descartando os 2 bytes restantes.
+                SSM_Status = 0;
+                break; 
         }
-        
-        // Aqui podemos colocar tratamentos diferentes dependendo do ALARMVALUE.
-        
-        // prepara para processar o próximo byte da mensagem
-        Q.Delete();
-        SSM_Status = 4;
         break; // case 3
 
 
     case 4:
     // Estado anterior deveria ter sido o 3.
-    // Estado 4 só descarta o CRC.
+    // Estado 4 só descarta o CRC (o quinto byte da mensagem).
 
         // descarta o byte do CRC.
         Q.Delete(); 
